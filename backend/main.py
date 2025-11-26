@@ -98,7 +98,7 @@ class DomainBulkDelete(BaseModel):
 class SSLStatus(BaseModel):
     id: int
     domain: str
-    ssl_status: str
+    ssl_status: Optional[str]
     ssl_expiry_date: Optional[str]
     days_until_expiry: Optional[int]
     https_status: Optional[str]
