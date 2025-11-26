@@ -311,10 +311,10 @@
                                         <th style="width: 40px;">
                                             <input type="checkbox" id="selectAll" onclick="toggleSelectAll()">
                                         </th>
-                                        <th>Domain</th>
-                                        <th style="width: 150px;">SSL Status History</th>
-                                        <th style="width: 180px;">Expired on</th>
-                                        <th style="width: 150px;">Last Scan</th>
+                                        <th style="width: 300px;">Domain</th>
+                                        <th style="width: 200px;">SSL Status History</th>
+                                        <th style="width: 200px;">Expired on</th>
+                                        <th style="width: 180px;">Last Scan</th>
                                         <th style="width: 80px;">Actions</th>
                                     </tr>
                                 </thead>
@@ -328,6 +328,22 @@
                                     </tr>
                                 </tbody>
                             </table>
+                        </div>
+
+                        <!-- Pagination -->
+                        <div class="card-footer clearfix">
+                            <div class="row">
+                                <div class="col-sm-12 col-md-5">
+                                    <div class="dataTables_info" id="paginationInfo">
+                                        Showing 0 to 0 of 0 entries
+                                    </div>
+                                </div>
+                                <div class="col-sm-12 col-md-7">
+                                    <ul class="pagination pagination-sm m-0 float-right" id="paginationControls">
+                                        <!-- Pagination buttons will be rendered here -->
+                                    </ul>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -404,6 +420,11 @@ example3.com"></textarea>
 <script>
 const API_BASE_URL = 'http://74.48.129.112:8080/api';
 
+// Pagination state
+let currentPage = 1;
+let totalPages = 1;
+let totalDomains = 0;
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     loadDashboard();
@@ -452,12 +473,84 @@ async function loadDomains(page = 1) {
         const response = await fetch(`${API_BASE_URL}/domains?${params}`);
         const data = await response.json();
 
-        renderDomainTable(data.domains || data);
+        // Handle pagination response
+        if (data.domains) {
+            currentPage = data.page || 1;
+            totalPages = data.total_pages || 1;
+            totalDomains = data.total || 0;
+            renderDomainTable(data.domains);
+            renderPagination();
+        } else {
+            // Fallback for non-paginated response
+            renderDomainTable(data);
+        }
     } catch (error) {
         console.error('Error loading domains:', error);
         const tbody = document.getElementById('domainTableBody');
         tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error loading domains</td></tr>';
     }
+}
+
+// Render pagination controls
+function renderPagination() {
+    const paginationInfo = document.getElementById('paginationInfo');
+    const paginationControls = document.getElementById('paginationControls');
+
+    // Update info text
+    const start = totalDomains > 0 ? ((currentPage - 1) * 100) + 1 : 0;
+    const end = Math.min(currentPage * 100, totalDomains);
+    paginationInfo.textContent = `Showing ${start} to ${end} of ${totalDomains} entries`;
+
+    // Generate pagination buttons
+    let html = '';
+
+    // Previous button
+    html += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="changePage(${currentPage - 1}); return false;">Previous</a>
+    </li>`;
+
+    // Page numbers
+    const maxButtons = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+
+    if (endPage - startPage + 1 < maxButtons) {
+        startPage = Math.max(1, endPage - maxButtons + 1);
+    }
+
+    if (startPage > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(1); return false;">1</a></li>`;
+        if (startPage > 2) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${i}); return false;">${i}</a>
+        </li>`;
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${totalPages}); return false;">${totalPages}</a></li>`;
+    }
+
+    // Next button
+    html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="changePage(${currentPage + 1}); return false;">Next</a>
+    </li>`;
+
+    paginationControls.innerHTML = html;
+}
+
+// Change page
+function changePage(page) {
+    if (page < 1 || page > totalPages) return;
+    currentPage = page;
+    loadDomains(page);
 }
 
 // Render domain table
@@ -498,13 +591,14 @@ function renderDomainTable(domains) {
     });
 }
 
-// Render SSL status dots (last 5 scans)
+// Render SSL status dots (last 5 scans) - oldest to newest (left to right)
 function renderSSLStatusDots(history) {
     if (!history || history.length === 0) {
         return '<span class="ssl-dot no-data" title="No scan data"></span>';
     }
 
-    const dots = history.slice(0, 5).map(h => {
+    // Reverse the array so oldest is first (leftmost)
+    const dots = history.slice(0, 5).reverse().map(h => {
         const cssClass = h.ssl_status === 'VALID' ? 'valid' : (h.ssl_status === 'INVALID' ? 'invalid' : 'no-data');
         const statusText = h.ssl_status || 'Unknown';
         const scanTime = h.scan_time || 'N/A';
@@ -549,7 +643,8 @@ function escapeHtml(text) {
 
 // Apply filters
 function applyFilters() {
-    loadDomains();
+    currentPage = 1; // Reset to first page when applying filters
+    loadDomains(1);
 }
 
 // Quick filter from stats cards
@@ -572,7 +667,8 @@ function applyQuickFilter(type) {
             break;
     }
 
-    loadDomains();
+    currentPage = 1; // Reset to first page
+    loadDomains(1);
 }
 
 // Refresh data
