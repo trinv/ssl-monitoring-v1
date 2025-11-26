@@ -154,7 +154,6 @@ perform_scan() {
     local VALID_COUNT=0
     local INVALID_COUNT=0
     local EXPIRED_SOON=0
-    local FAILED_COUNT=0
     
     while IFS='|' read -r PREFIX SSL_STATUS DAYS_UNTIL_EXPIRY EXPIRY_TS; do
         [[ "$PREFIX" != "RESULT:"* ]] && continue
@@ -196,10 +195,10 @@ perform_scan() {
     
     # Save statistics
     psql_query "
-        INSERT INTO scan_stats 
-        (total_domains, ssl_valid_count, ssl_invalid_count, expired_soon_count, failed_count, scan_duration_seconds)
-        VALUES 
-        ($TOTAL_DOMAINS, $VALID_COUNT, $INVALID_COUNT, $EXPIRED_SOON, $FAILED_COUNT, $DURATION);
+        INSERT INTO scan_stats
+        (total_domains, ssl_valid_count, ssl_invalid_count, expired_soon_count, scan_duration_seconds)
+        VALUES
+        ($TOTAL_DOMAINS, $VALID_COUNT, $INVALID_COUNT, $EXPIRED_SOON, $DURATION);
     " >/dev/null 2>&1
     
     # Cleanup
@@ -213,7 +212,6 @@ perform_scan() {
     log_info "SSL Valid: $VALID_COUNT"
     log_info "SSL Invalid: $INVALID_COUNT"
     log_info "Expired Soon (<7 days): $EXPIRED_SOON"
-    log_info "Failed: $FAILED_COUNT"
     log_info "Duration: ${DURATION}s ($(($DURATION / 60))m)"
     
     if [[ $DURATION -gt 0 ]]; then

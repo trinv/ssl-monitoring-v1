@@ -272,19 +272,6 @@
                                     </select>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>HTTPS Status</label>
-                                    <select id="httpsStatusFilter" class="form-control">
-                                        <option value="">All</option>
-                                        <option value="2xx">2xx Success</option>
-                                        <option value="3xx">3xx Redirect</option>
-                                        <option value="4xx">4xx Client Error</option>
-                                        <option value="5xx">5xx Server Error</option>
-                                        <option value="NO_RESPONSE">Failed</option>
-                                    </select>
-                                </div>
-                            </div>
                             <div class="col-md-2">
                                 <div class="form-group">
                                     <label>&nbsp;</label>
@@ -327,15 +314,13 @@
                                         <th>Domain</th>
                                         <th style="width: 150px;">SSL Status History</th>
                                         <th style="width: 180px;">Expired on</th>
-                                        <th style="width: 120px;">HTTPS Status</th>
-                                        <th style="width: 200px;">Redirect to</th>
                                         <th style="width: 150px;">Last Scan</th>
                                         <th style="width: 80px;">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="domainTableBody">
                                     <tr>
-                                        <td colspan="8" class="text-center">
+                                        <td colspan="6" class="text-center">
                                             <div class="spinner-border text-primary" role="status">
                                                 <span class="sr-only">Loading...</span>
                                             </div>
@@ -448,48 +433,30 @@ async function loadDashboard() {
     }
 }
 
-// Load domains with current filters
-async function loadDomains() {
+// Load domains with current filters and pagination
+async function loadDomains(page = 1) {
     const params = new URLSearchParams();
-    
+
     const search = document.getElementById('searchInput')?.value;
     const sslStatus = document.getElementById('sslStatusFilter')?.value;
     const expiryFilter = document.getElementById('expiryFilter')?.value;
-    const httpsStatus = document.getElementById('httpsStatusFilter')?.value;
-    
-    params.append('limit', '100');
-    
+
+    params.append('page', page);
+    params.append('per_page', '100');
+
     if (search) params.append('search', search);
     if (sslStatus) params.append('ssl_status', sslStatus);
     if (expiryFilter === 'expired_soon') params.append('expired_soon', 'true');
-    if (httpsStatus) {
-        if (httpsStatus.endsWith('xx')) {
-            // For 2xx, 3xx, etc - we'll filter client-side
-        } else {
-            params.append('https_status', httpsStatus);
-        }
-    }
-    
+
     try {
         const response = await fetch(`${API_BASE_URL}/domains?${params}`);
-        const domains = await response.json();
-        
-        // Client-side filter for HTTP status ranges
-        let filteredDomains = domains;
-        if (httpsStatus && httpsStatus.endsWith('xx')) {
-            const prefix = httpsStatus.charAt(0);
-            filteredDomains = domains.filter(d => {
-                const status = d.https_status;
-                if (!status || status === 'NO_RESPONSE') return false;
-                return status.toString().startsWith(prefix);
-            });
-        }
-        
-        renderDomainTable(filteredDomains);
+        const data = await response.json();
+
+        renderDomainTable(data.domains || data);
     } catch (error) {
         console.error('Error loading domains:', error);
         const tbody = document.getElementById('domainTableBody');
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error loading domains</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error loading domains</td></tr>';
     }
 }
 
@@ -513,9 +480,7 @@ function renderDomainTable(domains) {
             <td class="domain-cell">${escapeHtml(d.domain)}</td>
             <td>${renderSSLStatusDots(d.status_history)}</td>
             <td>${renderExpiryDate(d.ssl_expiry_date, d.days_until_expiry)}</td>
-            <td>${renderHTTPSStatus(d.https_status)}</td>
-            <td>${renderRedirectUrl(d.redirect_url)}</td>
-            <td>${formatDateTime(d.scan_time)}</td>
+            <td>${d.scan_time || 'N/A'}</td>
             <td>
                 <button class="btn btn-sm btn-danger" onclick="deleteDomain(${d.id})" title="Delete">
                     <i class="fas fa-trash"></i>
@@ -538,17 +503,16 @@ function renderSSLStatusDots(history) {
     if (!history || history.length === 0) {
         return '<span class="ssl-dot no-data" title="No scan data"></span>';
     }
-    
+
     const dots = history.slice(0, 5).map(h => {
         const cssClass = h.ssl_status === 'VALID' ? 'valid' : (h.ssl_status === 'INVALID' ? 'invalid' : 'no-data');
         const statusText = h.ssl_status || 'Unknown';
-        const daysText = h.days_until_expiry !== null ? `${h.days_until_expiry} days` : 'N/A';
-        const timeText = formatDateTime(h.scan_time);
-        const tooltip = `${statusText}\\n${daysText}\\n${timeText}`;
-        
+        const scanTime = h.scan_time || 'N/A';
+        const tooltip = `${statusText} - ${scanTime}`;
+
         return `<span class="ssl-dot ${cssClass}" data-toggle="tooltip" title="${tooltip}"></span>`;
     }).join('');
-    
+
     return dots || '<span class="ssl-dot no-data" title="No data"></span>';
 }
 
@@ -568,47 +532,7 @@ function renderExpiryDate(expiryDate, daysUntil) {
     return `<span class="badge ${badgeClass}">${escapeHtml(dateStr)}<br><small>(${daysUntil} days)</small></span>`;
 }
 
-// Render HTTPS status code with color
-function renderHTTPSStatus(status) {
-    if (!status || status === '-' || status === 'NO_RESPONSE') {
-        return '<span class="badge badge-https-failed">Failed</span>';
-    }
-    
-    const statusNum = parseInt(status);
-    let badgeClass = 'badge-secondary';
-    
-    if (!isNaN(statusNum)) {
-        if (statusNum >= 200 && statusNum < 300) badgeClass = 'badge-https-2xx';
-        else if (statusNum >= 300 && statusNum < 400) badgeClass = 'badge-https-3xx';
-        else if (statusNum >= 400 && statusNum < 500) badgeClass = 'badge-https-4xx';
-        else if (statusNum >= 500) badgeClass = 'badge-https-5xx';
-    }
-    
-    return `<span class="badge ${badgeClass}">${escapeHtml(status)}</span>`;
-}
-
-// Render redirect URL
-function renderRedirectUrl(url) {
-    if (!url || url === '-') {
-        return '<span class="text-muted">-</span>';
-    }
-    return `<a href="${escapeHtml(url)}" target="_blank" class="redirect-url" title="${escapeHtml(url)}">${escapeHtml(url)}</a>`;
-}
-
-// Format datetime
-function formatDateTime(dateStr) {
-    if (!dateStr) return '<span class="text-muted">Never</span>';
-    const date = new Date(dateStr);
-    if (isNaN(date)) return '<span class="text-muted">Invalid</span>';
-    
-    return date.toLocaleString('en-GB', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
+// HTTPS status and redirect functions removed - no longer needed
 
 // Escape HTML
 function escapeHtml(text) {
@@ -633,9 +557,8 @@ function applyQuickFilter(type) {
     // Reset all filters
     document.getElementById('sslStatusFilter').value = '';
     document.getElementById('expiryFilter').value = '';
-    document.getElementById('httpsStatusFilter').value = '';
     document.getElementById('searchInput').value = '';
-    
+
     // Apply specific filter
     switch(type) {
         case 'valid':
@@ -648,7 +571,7 @@ function applyQuickFilter(type) {
             document.getElementById('sslStatusFilter').value = 'INVALID';
             break;
     }
-    
+
     loadDomains();
 }
 
