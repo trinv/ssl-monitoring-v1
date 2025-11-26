@@ -95,16 +95,19 @@ class DomainBulkCreate(BaseModel):
 class DomainBulkDelete(BaseModel):
     domain_ids: List[int]
 
+class SSLStatusHistory(BaseModel):
+    ssl_status: str
+    scan_time: str  # Format: HH:MM dd/mm/yyyy
+    days_until_expiry: Optional[int]
+
 class SSLStatus(BaseModel):
     id: int
     domain: str
     ssl_status: Optional[str]
-    ssl_expiry_date: Optional[str]
+    ssl_expiry_date: Optional[str]  # Format: dd/mm/yyyy
     days_until_expiry: Optional[int]
-    https_status: Optional[str]
-    redirect_url: Optional[str]
-    scan_time: Optional[datetime]
-    status_history: Optional[List[dict]] = None
+    scan_time: Optional[str]  # Format: HH:MM dd/mm/yyyy
+    status_history: Optional[List[SSLStatusHistory]] = None
 
 class DashboardSummary(BaseModel):
     total_domains: int
@@ -151,70 +154,111 @@ async def get_dashboard_summary():
             "last_scan_time": row['last_scan_time']
         }
 
-@app.get("/api/domains", response_model=List[SSLStatus])
+class DomainListResponse(BaseModel):
+    total: int
+    page: int
+    per_page: int
+    total_pages: int
+    domains: List[SSLStatus]
+
+@app.get("/api/domains", response_model=DomainListResponse)
 async def get_domains(
     ssl_status: Optional[str] = Query(None),
     expired_soon: Optional[bool] = Query(None),
-    https_status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0)
+    page: int = Query(1, ge=1),
+    per_page: int = Query(100, ge=1, le=1000)
 ):
     # Refresh materialized view
     await db_pool.execute("REFRESH MATERIALIZED VIEW latest_ssl_status")
-    
-    query = """
-        SELECT 
-            id, domain, ssl_status, ssl_expiry_date, days_until_expiry,
-            https_status, redirect_url, scan_time
-        FROM latest_ssl_status
-        WHERE 1=1
-    """
+
+    # Build query
+    where_conditions = ["1=1"]
     params = []
     param_count = 1
-    
+
     if ssl_status:
-        query += f" AND ssl_status = ${param_count}"
+        where_conditions.append(f"ssl_status = ${param_count}")
         params.append(ssl_status)
         param_count += 1
-    
+
     if expired_soon:
-        query += " AND days_until_expiry IS NOT NULL AND days_until_expiry < 7"
-    
-    if https_status:
-        query += f" AND https_status = ${param_count}"
-        params.append(https_status)
-        param_count += 1
-    
+        where_conditions.append("days_until_expiry IS NOT NULL AND days_until_expiry < 7")
+
     if search:
-        query += f" AND domain ILIKE ${param_count}"
+        where_conditions.append(f"domain ILIKE ${param_count}")
         params.append(f"%{search}%")
         param_count += 1
-    
-    query += " ORDER BY domain ASC"
-    query += f" LIMIT ${param_count} OFFSET ${param_count + 1}"
-    params.extend([limit, offset])
-    
+
+    where_clause = " AND ".join(where_conditions)
+
     async with db_pool.acquire() as conn:
+        # Get total count
+        total = await conn.fetchval(f"""
+            SELECT COUNT(*) FROM latest_ssl_status WHERE {where_clause}
+        """, *params)
+
+        total_pages = (total + per_page - 1) // per_page
+        offset = (page - 1) * per_page
+
+        # Get paginated data
+        query = f"""
+            SELECT
+                id, domain, ssl_status, ssl_expiry_timestamp, days_until_expiry, scan_time
+            FROM latest_ssl_status
+            WHERE {where_clause}
+            ORDER BY domain ASC
+            LIMIT ${param_count} OFFSET ${param_count + 1}
+        """
+        params.extend([per_page, offset])
+
         rows = await conn.fetch(query, *params)
-        
+
         results = []
         for row in rows:
-            domain_dict = dict(row)
-            
+            # Format dates
+            expiry_date_str = None
+            if row['ssl_expiry_timestamp']:
+                expiry_date_str = row['ssl_expiry_timestamp'].strftime('%d/%m/%Y')
+
+            scan_time_str = None
+            if row['scan_time']:
+                scan_time_str = row['scan_time'].strftime('%H:%M %d/%m/%Y')
+
             # Get status history (last 5 scans)
             history = await conn.fetch("""
-                SELECT scan_time, ssl_status, days_until_expiry, https_status
+                SELECT scan_time, ssl_status, days_until_expiry
                 FROM ssl_scan_results
                 WHERE domain_id = $1
                 ORDER BY scan_time DESC
                 LIMIT 5
             """, row['id'])
-            
-            domain_dict['status_history'] = [dict(h) for h in history]
-            results.append(domain_dict)
-        
-        return results
+
+            history_list = []
+            for h in history:
+                history_list.append({
+                    'ssl_status': h['ssl_status'],
+                    'scan_time': h['scan_time'].strftime('%H:%M %d/%m/%Y') if h['scan_time'] else None,
+                    'days_until_expiry': h['days_until_expiry']
+                })
+
+            results.append({
+                'id': row['id'],
+                'domain': row['domain'],
+                'ssl_status': row['ssl_status'],
+                'ssl_expiry_date': expiry_date_str,
+                'days_until_expiry': row['days_until_expiry'],
+                'scan_time': scan_time_str,
+                'status_history': history_list
+            })
+
+        return {
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': total_pages,
+            'domains': results
+        }
 
 @app.post("/api/domains")
 async def create_domain(domain: DomainCreate):
@@ -291,36 +335,35 @@ async def bulk_delete_domains(bulk: DomainBulkDelete):
 async def export_csv(ssl_status: Optional[str] = Query(None)):
     # Refresh materialized view
     await db_pool.execute("REFRESH MATERIALIZED VIEW latest_ssl_status")
-    
+
     query = """
-        SELECT domain, ssl_status, ssl_expiry_date, days_until_expiry,
-               https_status, redirect_url, scan_time
+        SELECT domain, ssl_status, ssl_expiry_timestamp, days_until_expiry, scan_time
         FROM latest_ssl_status
         WHERE 1=1
     """
-    
+
     async with db_pool.acquire() as conn:
         if ssl_status:
             rows = await conn.fetch(query + " AND ssl_status = $1", ssl_status)
         else:
             rows = await conn.fetch(query)
-        
+
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow([
-            'Domain', 'SSL Status', 'Expiry Date', 'Days Until Expiry',
-            'HTTPS Status', 'Redirect URL', 'Last Scan'
+            'Domain', 'SSL Status', 'Expiry Date', 'Days Until Expiry', 'Last Scan'
         ])
-        
+
         for row in rows:
+            expiry_date = row['ssl_expiry_timestamp'].strftime('%d/%m/%Y') if row['ssl_expiry_timestamp'] else ''
+            last_scan = row['scan_time'].strftime('%H:%M %d/%m/%Y') if row['scan_time'] else ''
+
             writer.writerow([
-                row['domain'], 
-                row['ssl_status'],
-                row['ssl_expiry_date'] or '',
+                row['domain'],
+                row['ssl_status'] or '',
+                expiry_date,
                 row['days_until_expiry'] or '',
-                row['https_status'] or '',
-                row['redirect_url'] or '',
-                row['scan_time']
+                last_scan
             ])
         
         output.seek(0)

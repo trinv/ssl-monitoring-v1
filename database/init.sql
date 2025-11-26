@@ -19,17 +19,12 @@ CREATE TABLE IF NOT EXISTS ssl_scan_results (
     id SERIAL PRIMARY KEY,
     domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
     scan_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    -- SSL Status from bash scanner
+
+    -- SSL Status
     ssl_status VARCHAR(20) NOT NULL,
-    ssl_expiry_date VARCHAR(100),
     ssl_expiry_timestamp TIMESTAMP,
     days_until_expiry INTEGER,
-    
-    -- HTTPS Status from curl
-    https_status VARCHAR(50),
-    redirect_url TEXT,
-    
+
     -- Error tracking
     error_message TEXT
 );
@@ -47,7 +42,6 @@ CREATE TABLE IF NOT EXISTS scan_stats (
     ssl_valid_count INTEGER DEFAULT 0,
     ssl_invalid_count INTEGER DEFAULT 0,
     expired_soon_count INTEGER DEFAULT 0,
-    failed_count INTEGER DEFAULT 0,
     scan_duration_seconds INTEGER
 );
 
@@ -60,11 +54,8 @@ SELECT DISTINCT ON (d.id)
     d.domain,
     d.last_scanned_at,
     ssr.ssl_status,
-    ssr.ssl_expiry_date,
     ssr.ssl_expiry_timestamp,
     ssr.days_until_expiry,
-    ssr.https_status,
-    ssr.redirect_url,
     ssr.scan_time
 FROM domains d
 LEFT JOIN ssl_scan_results ssr ON d.id = ssr.domain_id
@@ -77,10 +68,10 @@ CREATE INDEX idx_latest_ssl_status_days_expiry ON latest_ssl_status(days_until_e
 
 -- ==================== View: Dashboard Summary ====================
 CREATE OR REPLACE VIEW dashboard_summary AS
-SELECT 
+SELECT
     COUNT(*) as total_domains,
     COUNT(*) FILTER (WHERE ssl_status = 'VALID') as ssl_valid_count,
     COUNT(*) FILTER (WHERE days_until_expiry IS NOT NULL AND days_until_expiry < 7) as expired_soon_count,
-    COUNT(*) FILTER (WHERE ssl_status = 'INVALID' OR https_status = 'NO_RESPONSE') as failed_count,
+    COUNT(*) FILTER (WHERE ssl_status = 'INVALID') as failed_count,
     MAX(scan_time) as last_scan_time
 FROM latest_ssl_status;

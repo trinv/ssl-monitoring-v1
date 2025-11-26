@@ -53,7 +53,7 @@ check_domain() {
     CERT_INFO=$(echo | timeout $TIMEOUT openssl s_client -connect "$DOMAIN:443" -servername "$DOMAIN" 2>/dev/null)
 
     if [[ -z "$CERT_INFO" ]]; then
-        echo "RESULT:$DOMAIN_ID|INVALID|NO_SSL|NULL|NO_RESPONSE|-|NULL"
+        echo "RESULT:$DOMAIN_ID|INVALID|NULL|NULL"
         return
     fi
 
@@ -62,18 +62,17 @@ check_domain() {
 
     if [[ -z "$EXPIRY" ]]; then
         SSL_VALID="INVALID"
-        EXPIRY="-"
         DAYS_UNTIL_EXPIRY="NULL"
         EXPIRY_TS="NULL"
     else
         SSL_VALID="VALID"
-        
+
         # Calculate days until expiry
         EXPIRY_EPOCH=$(date -d "$EXPIRY" +%s 2>/dev/null)
         if [[ -n "$EXPIRY_EPOCH" ]]; then
             NOW_EPOCH=$(date +%s)
             DAYS_UNTIL_EXPIRY=$(( ($EXPIRY_EPOCH - $NOW_EPOCH) / 86400 ))
-            
+
             # Convert to PostgreSQL timestamp
             EXPIRY_TS=$(date -d "$EXPIRY" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)
             [[ -z "$EXPIRY_TS" ]] && EXPIRY_TS="NULL"
@@ -83,17 +82,8 @@ check_domain() {
         fi
     fi
 
-    #### 3. Check HTTPS status + redirect
-    CURL_OUTPUT=$(curl -Ik --max-time $TIMEOUT -L --max-redirs 10 "https://$DOMAIN" 2>/dev/null)
-
-    HTTPS_STATUS=$(echo "$CURL_OUTPUT" | grep -m1 HTTP | awk '{print $2}')
-    REDIRECT_TO=$(echo "$CURL_OUTPUT" | grep -i "location:" | tail -n1 | awk '{print $2}' | tr -d '\r')
-
-    [[ -z "$HTTPS_STATUS" ]] && HTTPS_STATUS="NO_RESPONSE"
-    [[ -z "$REDIRECT_TO" ]] && REDIRECT_TO="-"
-
-    #### 4. Output result
-    echo "RESULT:$DOMAIN_ID|$SSL_VALID|$EXPIRY|$DAYS_UNTIL_EXPIRY|$HTTPS_STATUS|$REDIRECT_TO|$EXPIRY_TS"
+    #### 3. Output result
+    echo "RESULT:$DOMAIN_ID|$SSL_VALID|$DAYS_UNTIL_EXPIRY|$EXPIRY_TS"
 }
 
 export -f check_domain
@@ -166,33 +156,30 @@ perform_scan() {
     local EXPIRED_SOON=0
     local FAILED_COUNT=0
     
-    while IFS='|' read -r PREFIX SSL_STATUS EXPIRY DAYS_UNTIL_EXPIRY HTTPS_STATUS REDIRECT_URL EXPIRY_TS; do
+    while IFS='|' read -r PREFIX SSL_STATUS DAYS_UNTIL_EXPIRY EXPIRY_TS; do
         [[ "$PREFIX" != "RESULT:"* ]] && continue
 
         DOMAIN_ID=$(echo "$PREFIX" | cut -d: -f2)
-        
+
         # Clean up values for SQL
-        [[ "$REDIRECT_URL" == "-" ]] && REDIRECT_URL="NULL" || REDIRECT_URL="'$(echo "$REDIRECT_URL" | sed "s/'/''/g")'"
-        [[ "$EXPIRY" == "-" ]] && EXPIRY="NULL" || EXPIRY="'$(echo "$EXPIRY" | sed "s/'/''/g")'"
         [[ "$EXPIRY_TS" == "NULL" ]] && EXPIRY_TS="NULL" || EXPIRY_TS="'$EXPIRY_TS'"
         [[ "$DAYS_UNTIL_EXPIRY" == "NULL" ]] && DAYS_UNTIL_EXPIRY="NULL"
-        
+
         # Insert into database
         psql_query "
             INSERT INTO ssl_scan_results
-            (domain_id, ssl_status, ssl_expiry_date, ssl_expiry_timestamp, days_until_expiry, https_status, redirect_url)
+            (domain_id, ssl_status, ssl_expiry_timestamp, days_until_expiry)
             VALUES
-            ($DOMAIN_ID, '$SSL_STATUS', $EXPIRY, $EXPIRY_TS, $DAYS_UNTIL_EXPIRY, '$HTTPS_STATUS', $REDIRECT_URL);
+            ($DOMAIN_ID, '$SSL_STATUS', $EXPIRY_TS, $DAYS_UNTIL_EXPIRY);
 
             UPDATE domains
             SET last_scanned_at = NOW()
             WHERE id = $DOMAIN_ID;
         " >/dev/null 2>&1
-        
+
         # Update counters
         [[ "$SSL_STATUS" == "VALID" ]] && ((VALID_COUNT++))
         [[ "$SSL_STATUS" == "INVALID" ]] && ((INVALID_COUNT++))
-        [[ "$HTTPS_STATUS" == "NO_RESPONSE" ]] && ((FAILED_COUNT++))
         
         if [[ "$DAYS_UNTIL_EXPIRY" != "NULL" ]] && [[ $DAYS_UNTIL_EXPIRY -lt 7 ]]; then
             ((EXPIRED_SOON++))

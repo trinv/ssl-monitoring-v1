@@ -8,12 +8,10 @@ import asyncio
 import asyncpg
 import ssl
 import socket
-import aiohttp
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List
 import os
 import logging
-from urllib.parse import urlparse
 
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://domainuser:s3gs8Tu50ISwFu37@postgres:5432/domains")
@@ -79,50 +77,12 @@ async def get_ssl_certificate(domain: str, timeout: int = 10) -> Optional[Dict]:
         return None
 
 
-async def check_https_status(domain: str, session: aiohttp.ClientSession, timeout: int = 10) -> Dict:
-    """
-    Check HTTPS status and follow redirects
-    Equivalent to: curl -Ik --max-time 5 -L --max-redirs 10 https://domain
-    """
-    result = {
-        'https_status': None,
-        'redirect_url': None,
-        'error': None
-    }
-    
-    url = f"https://{domain}"
-    
-    try:
-        async with session.get(
-            url,
-            timeout=aiohttp.ClientTimeout(total=timeout),
-            allow_redirects=True,
-            ssl=False  # Don't verify SSL (we already checked it)
-        ) as response:
-            result['https_status'] = response.status
-            
-            # Get final URL after redirects
-            if str(response.url) != url:
-                result['redirect_url'] = str(response.url)
-            
-            return result
-            
-    except asyncio.TimeoutError:
-        result['error'] = 'timeout'
-        result['https_status'] = 0
-    except aiohttp.ClientError as e:
-        result['error'] = f'client_error: {type(e).__name__}'
-        result['https_status'] = 0
-    except Exception as e:
-        result['error'] = f'error: {str(e)}'
-        result['https_status'] = 0
-    
-    return result
+# Removed HTTPS status check - only focusing on SSL certificate validation
 
 
-async def scan_domain(domain: str, semaphore: asyncio.Semaphore, session: aiohttp.ClientSession) -> Dict:
+async def scan_domain(domain: str, semaphore: asyncio.Semaphore) -> Dict:
     """
-    Scan a single domain for SSL certificate and HTTPS status
+    Scan a single domain for SSL certificate only
     """
     async with semaphore:
         result = {
@@ -130,14 +90,12 @@ async def scan_domain(domain: str, semaphore: asyncio.Semaphore, session: aiohtt
             'ssl_status': 'INVALID',
             'ssl_expiry_date': None,
             'days_until_expiry': None,
-            'https_status': None,
-            'redirect_url': None,
             'error_message': None
         }
-        
+
         # Check SSL certificate
         ssl_info = await get_ssl_certificate(domain, timeout=SCAN_TIMEOUT)
-        
+
         if ssl_info and ssl_info.get('valid'):
             result['ssl_status'] = 'VALID'
             result['ssl_expiry_date'] = ssl_info.get('expiry_date')
@@ -150,21 +108,6 @@ async def scan_domain(domain: str, semaphore: asyncio.Semaphore, session: aiohtt
             result['ssl_status'] = 'INVALID'
             result['error_message'] = 'Cannot retrieve SSL certificate'
 
-        # Check HTTPS status
-        https_result = await check_https_status(domain, session, timeout=SCAN_TIMEOUT)
-        https_status_code = https_result.get('https_status')
-
-        # Convert to string to match bash scanner format
-        if https_status_code == 0:
-            result['https_status'] = 'NO_RESPONSE'
-        else:
-            result['https_status'] = str(https_status_code)
-
-        result['redirect_url'] = https_result.get('redirect_url')
-
-        if https_result.get('error') and not result['error_message']:
-            result['error_message'] = https_result['error']
-        
         return result
 
 
@@ -188,22 +131,15 @@ async def bulk_insert_results(pool: asyncpg.Pool, results: List[Dict]) -> None:
             if not domain_id:
                 continue
             
-            # Format ssl_expiry_date as string if it's a datetime
-            ssl_expiry_str = None
-            ssl_expiry_ts = None
-            if r['ssl_expiry_date']:
-                ssl_expiry_str = r['ssl_expiry_date'].strftime('%b %d %H:%M:%S %Y GMT')
-                ssl_expiry_ts = r['ssl_expiry_date']
+            # Format ssl_expiry_timestamp
+            ssl_expiry_ts = r['ssl_expiry_date'] if r['ssl_expiry_date'] else None
 
             records.append((
                 domain_id,
                 datetime.now(),
                 r['ssl_status'],
-                ssl_expiry_str,
                 ssl_expiry_ts,
                 r['days_until_expiry'],
-                r['https_status'],
-                r['redirect_url'],
                 r['error_message']
             ))
 
@@ -211,9 +147,8 @@ async def bulk_insert_results(pool: asyncpg.Pool, results: List[Dict]) -> None:
             # Use COPY for bulk insert (fast!)
             await conn.copy_records_to_table(
                 'ssl_scan_results',
-                columns=['domain_id', 'scan_time', 'ssl_status', 'ssl_expiry_date',
-                        'ssl_expiry_timestamp', 'days_until_expiry', 'https_status',
-                        'redirect_url', 'error_message'],
+                columns=['domain_id', 'scan_time', 'ssl_status', 'ssl_expiry_timestamp',
+                        'days_until_expiry', 'error_message'],
                 records=records
             )
             
@@ -265,43 +200,37 @@ async def perform_scan(pool: asyncpg.Pool) -> None:
         }
         
         domain_list = [d['domain'] for d in domains]
-        
-        # Create semaphore and session
+
+        # Create semaphore
         semaphore = asyncio.Semaphore(SCAN_CONCURRENCY)
-        connector = aiohttp.TCPConnector(limit=SCAN_CONCURRENCY, limit_per_host=10)
-        
-        async with aiohttp.ClientSession(connector=connector) as session:
-            
-            for offset in range(0, total_domains, BATCH_SIZE):
-                batch_start = datetime.now()
-                batch = domain_list[offset:offset + BATCH_SIZE]
-                
-                logger.info(f"Processing batch: {offset:,}-{min(offset + BATCH_SIZE, total_domains):,} of {total_domains:,}")
-                
-                # Scan batch
-                tasks = [scan_domain(domain, semaphore, session) for domain in batch]
-                batch_results = await asyncio.gather(*tasks)
-                
-                # Insert results
-                await bulk_insert_results(pool, batch_results)
-                
-                # Update summary
-                for result in batch_results:
-                    if result['ssl_status'] == 'valid':
-                        summary['ssl_valid'] += 1
-                        if result['days_until_expiry'] and result['days_until_expiry'] < 7:
-                            summary['expired_soon'] += 1
-                    else:
-                        summary['ssl_invalid'] += 1
-                    
-                    if result['https_status'] is None or result['https_status'] >= 400:
-                        summary['failed'] += 1
-                
-                total_scanned += len(batch)
-                batch_duration = (datetime.now() - batch_start).total_seconds()
-                
-                logger.info(f"Batch completed in {batch_duration:.1f}s - Valid: {summary['ssl_valid']}, Invalid: {summary['ssl_invalid']}, Failed: {summary['failed']}")
-                logger.info("")
+
+        for offset in range(0, total_domains, BATCH_SIZE):
+            batch_start = datetime.now()
+            batch = domain_list[offset:offset + BATCH_SIZE]
+
+            logger.info(f"Processing batch: {offset:,}-{min(offset + BATCH_SIZE, total_domains):,} of {total_domains:,}")
+
+            # Scan batch
+            tasks = [scan_domain(domain, semaphore) for domain in batch]
+            batch_results = await asyncio.gather(*tasks)
+
+            # Insert results
+            await bulk_insert_results(pool, batch_results)
+
+            # Update summary
+            for result in batch_results:
+                if result['ssl_status'] == 'VALID':
+                    summary['ssl_valid'] += 1
+                    if result['days_until_expiry'] and result['days_until_expiry'] < 7:
+                        summary['expired_soon'] += 1
+                else:
+                    summary['ssl_invalid'] += 1
+
+            total_scanned += len(batch)
+            batch_duration = (datetime.now() - batch_start).total_seconds()
+
+            logger.info(f"Batch completed in {batch_duration:.1f}s - Valid: {summary['ssl_valid']}, Invalid: {summary['ssl_invalid']}")
+            logger.info("")
         
         # Refresh materialized view
         async with pool.acquire() as conn:
@@ -312,12 +241,12 @@ async def perform_scan(pool: asyncpg.Pool) -> None:
         # Record statistics
         async with pool.acquire() as conn:
             await conn.execute("""
-                INSERT INTO scan_stats 
-                (scan_time, total_domains, ssl_valid_count, ssl_invalid_count, 
-                 expired_soon_count, failed_count, scan_duration_seconds)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-            """, datetime.now(), total_scanned, summary['ssl_valid'], 
-            summary['ssl_invalid'], summary['expired_soon'], summary['failed'], scan_duration)
+                INSERT INTO scan_stats
+                (scan_time, total_domains, ssl_valid_count, ssl_invalid_count,
+                 expired_soon_count, scan_duration_seconds)
+                VALUES ($1, $2, $3, $4, $5, $6)
+            """, datetime.now(), total_scanned, summary['ssl_valid'],
+            summary['ssl_invalid'], summary['expired_soon'], scan_duration)
         
         logger.info("=" * 80)
         logger.info("Scan Completed Successfully!")
@@ -325,7 +254,6 @@ async def perform_scan(pool: asyncpg.Pool) -> None:
         logger.info(f"SSL Valid: {summary['ssl_valid']:,}")
         logger.info(f"SSL Invalid: {summary['ssl_invalid']:,}")
         logger.info(f"Expired Soon: {summary['expired_soon']:,}")
-        logger.info(f"Failed: {summary['failed']:,}")
         
         if scan_duration > 0:
             logger.info(f"Total duration: {scan_duration}s ({scan_duration/60:.1f} minutes)")
