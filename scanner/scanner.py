@@ -127,44 +127,43 @@ async def scan_domain(domain: str, semaphore: asyncio.Semaphore, session: aiohtt
     async with semaphore:
         result = {
             'domain': domain,
-            'ssl_status': 'no_ssl',
+            'ssl_status': 'INVALID',
             'ssl_expiry_date': None,
             'days_until_expiry': None,
             'https_status': None,
             'redirect_url': None,
-            'error_type': None,
-            'error_message': None,
-            'certificate_issuer': None,
-            'certificate_subject': None
+            'error_message': None
         }
         
         # Check SSL certificate
         ssl_info = await get_ssl_certificate(domain, timeout=SCAN_TIMEOUT)
         
         if ssl_info and ssl_info.get('valid'):
-            result['ssl_status'] = 'valid'
+            result['ssl_status'] = 'VALID'
             result['ssl_expiry_date'] = ssl_info.get('expiry_date')
-            result['certificate_issuer'] = ssl_info.get('issuer')
-            result['certificate_subject'] = ssl_info.get('subject')
-            
+
             # Calculate days until expiry
             if result['ssl_expiry_date']:
                 days_diff = (result['ssl_expiry_date'] - datetime.now()).days
                 result['days_until_expiry'] = days_diff
         else:
-            result['ssl_status'] = 'invalid'
-            result['error_type'] = 'ssl_error'
+            result['ssl_status'] = 'INVALID'
             result['error_message'] = 'Cannot retrieve SSL certificate'
-        
+
         # Check HTTPS status
         https_result = await check_https_status(domain, session, timeout=SCAN_TIMEOUT)
-        result['https_status'] = https_result.get('https_status')
+        https_status_code = https_result.get('https_status')
+
+        # Convert to string to match bash scanner format
+        if https_status_code == 0:
+            result['https_status'] = 'NO_RESPONSE'
+        else:
+            result['https_status'] = str(https_status_code)
+
         result['redirect_url'] = https_result.get('redirect_url')
-        
-        if https_result.get('error'):
-            if not result['error_type']:
-                result['error_type'] = 'https_error'
-                result['error_message'] = https_result['error']
+
+        if https_result.get('error') and not result['error_message']:
+            result['error_message'] = https_result['error']
         
         return result
 
@@ -189,27 +188,32 @@ async def bulk_insert_results(pool: asyncpg.Pool, results: List[Dict]) -> None:
             if not domain_id:
                 continue
             
+            # Format ssl_expiry_date as string if it's a datetime
+            ssl_expiry_str = None
+            ssl_expiry_ts = None
+            if r['ssl_expiry_date']:
+                ssl_expiry_str = r['ssl_expiry_date'].strftime('%b %d %H:%M:%S %Y GMT')
+                ssl_expiry_ts = r['ssl_expiry_date']
+
             records.append((
                 domain_id,
                 datetime.now(),
                 r['ssl_status'],
-                r['ssl_expiry_date'],
+                ssl_expiry_str,
+                ssl_expiry_ts,
                 r['days_until_expiry'],
                 r['https_status'],
                 r['redirect_url'],
-                r['error_type'],
-                r['error_message'],
-                r['certificate_issuer'],
-                r['certificate_subject']
+                r['error_message']
             ))
-        
+
         if records:
             # Use COPY for bulk insert (fast!)
             await conn.copy_records_to_table(
                 'ssl_scan_results',
                 columns=['domain_id', 'scan_time', 'ssl_status', 'ssl_expiry_date',
-                        'days_until_expiry', 'https_status', 'redirect_url',
-                        'error_type', 'error_message', 'certificate_issuer', 'certificate_subject'],
+                        'ssl_expiry_timestamp', 'days_until_expiry', 'https_status',
+                        'redirect_url', 'error_message'],
                 records=records
             )
             
