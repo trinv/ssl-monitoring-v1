@@ -179,13 +179,13 @@ perform_scan() {
         
         # Insert into database
         psql_query "
-            INSERT INTO ssl_scan_results 
-            (domain_id, ssl_status, ssl_expiry_date, ssl_expiry_timestamp, days_until_expiry, https_status, redirect_url)
-            VALUES 
-            ($DOMAIN_ID, '$SSL_STATUS', $EXPIRY, $EXPIRY_TS, $DAYS_UNTIL_EXPIRY, '$HTTPS_STATUS', $REDIRECT_URL);
-            
-            UPDATE domains 
-            SET last_scanned_at = NOW() 
+            INSERT INTO ssl_scan_results
+            (domain_id, ssl_status, ssl_expiry_date, days_until_expiry, https_status, redirect_url, ssl_expiry_timestamp)
+            VALUES
+            ($DOMAIN_ID, '$SSL_STATUS', $EXPIRY, $DAYS_UNTIL_EXPIRY, '$HTTPS_STATUS', $REDIRECT_URL, $EXPIRY_TS);
+
+            UPDATE domains
+            SET last_scanned_at = NOW()
             WHERE id = $DOMAIN_ID;
         " >/dev/null 2>&1
         
