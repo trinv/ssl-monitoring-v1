@@ -22,13 +22,27 @@
         .ssl-dot.invalid { background-color: #dc3545; }
         .ssl-dot.no-data { background-color: #6c757d; }
         
-        .badge-expired-soon { 
-            background-color: #dc3545 !important; 
+        .badge-expired-soon {
+            background-color: #dc3545 !important;
             color: white !important;
+            font-size: 14px !important;
+            padding: 8px 12px !important;
+            border-radius: 6px !important;
+            border: 2px solid #c82333 !important;
+            font-weight: 600 !important;
+            line-height: 1.6 !important;
+            display: inline-block !important;
         }
-        .badge-expired-ok { 
-            background-color: #28a745 !important; 
+        .badge-expired-ok {
+            background-color: #28a745 !important;
             color: white !important;
+            font-size: 14px !important;
+            padding: 8px 12px !important;
+            border-radius: 6px !important;
+            border: 2px solid #218838 !important;
+            font-weight: 600 !important;
+            line-height: 1.6 !important;
+            display: inline-block !important;
         }
         .badge-https-2xx { 
             background-color: #28a745 !important; 
@@ -355,9 +369,9 @@
     </div>
 
     <footer class="main-footer">
-        <strong>SSL Certificate Monitor v2.1</strong> - MariaDB + Bash Scanner
+        <strong>SSL Certificate Monitor v2.1</strong> - Namestar
         <div class="float-right d-none d-sm-inline-block">
-            Server: <span id="serverInfo">74.48.129.112:8080</span>
+            Server: <span id="serverInfo">Namestar</span>
         </div>
     </footer>
 </div>
@@ -616,17 +630,17 @@ function renderSSLStatusDots(history) {
 // Render expiry date with color coding
 function renderExpiryDate(expiryDate, daysUntil) {
     if (!expiryDate || expiryDate === '-' || expiryDate === 'NO_SSL') {
-        return '<span class="badge badge-secondary">N/A</span>';
+        return '<span class="badge badge-secondary" style="font-size: 14px; padding: 8px 12px;">N/A</span>';
     }
-    
+
     if (daysUntil === null || daysUntil === undefined) {
-        return `<span class="badge badge-secondary">${escapeHtml(expiryDate)}</span>`;
+        return `<span class="badge badge-secondary" style="font-size: 14px; padding: 8px 12px;">${escapeHtml(expiryDate)}</span>`;
     }
-    
+
     const badgeClass = daysUntil < 7 ? 'badge-expired-soon' : 'badge-expired-ok';
     const dateStr = expiryDate.includes('GMT') ? new Date(expiryDate).toISOString().split('T')[0] : expiryDate;
-    
-    return `<span class="badge ${badgeClass}">${escapeHtml(dateStr)}<br><small>(${daysUntil} days)</small></span>`;
+
+    return `<span class="badge ${badgeClass}">${escapeHtml(dateStr)} - ${daysUntil} days</span>`;
 }
 
 // HTTPS status and redirect functions removed - no longer needed
