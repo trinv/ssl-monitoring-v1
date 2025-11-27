@@ -44,7 +44,7 @@ This will:
 3. Verify the user was created
 4. Show login credentials
 
-**Then try login again at http://74.48.129.112**
+**Then try login again at http://YOUR_IP_ADDRESS**
 
 ---
 
@@ -219,14 +219,14 @@ docker-compose logs -f backend
 
 ```bash
 # Test health endpoint
-curl http://74.48.129.112:8080/
+curl http://YOUR_IP_ADDRESS:8080/
 
 # Expected: {"status":"ok","message":"Domain Monitoring API",...}
 ```
 
 ```bash
 # Test login endpoint
-curl -X POST http://74.48.129.112:8080/api/auth/login \
+curl -X POST http://YOUR_IP_ADDRESS:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}'
 
@@ -380,13 +380,13 @@ docker-compose restart postgres backend
 # Check API URL in login.html
 grep "API_BASE_URL" frontend/login.html
 
-# Should be: const API_BASE_URL = 'http://74.48.129.112:8080/api';
+# Should be: const API_BASE_URL = 'http://YOUR_IP_ADDRESS:8080/api';
 ```
 
 If wrong, edit and fix:
 ```bash
 nano frontend/login.html
-# Change API_BASE_URL to: http://74.48.129.112:8080/api
+# Change API_BASE_URL to: http://YOUR_IP_ADDRESS:8080/api
 
 # Restart nginx
 docker-compose restart nginx
@@ -446,7 +446,7 @@ docker-compose exec postgres psql -U domainuser -d domains -c "SELECT * FROM use
 ./reset-admin.sh
 
 # 7. Try login
-# URL: http://74.48.129.112
+# URL: http://YOUR_IP_ADDRESS
 # Username: admin
 # Password: admin123
 ```
@@ -513,10 +513,10 @@ docker-compose exec postgres psql -U domainuser -d domains -c "SELECT COUNT(*) F
 docker-compose exec redis redis-cli PING
 
 # Backend API
-curl http://74.48.129.112:8080/health
+curl http://YOUR_IP_ADDRESS:8080/health
 
 # Nginx
-curl -I http://74.48.129.112
+curl -I http://YOUR_IP_ADDRESS
 ```
 
 ---
@@ -540,13 +540,13 @@ You should see:
 
 3. **Login works:**
    ```bash
-   $ curl -X POST http://74.48.129.112:8080/api/auth/login ...
+   $ curl -X POST http://YOUR_IP_ADDRESS:8080/api/auth/login ...
    {"access_token":"...", "token_type":"bearer"}
    ```
 
 4. **Dashboard accessible:**
    ```
-   http://74.48.129.112 → Shows login page
+   http://YOUR_IP_ADDRESS → Shows login page
    Login with admin/admin123 → Shows dashboard
    ```
 

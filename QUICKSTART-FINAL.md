@@ -53,7 +53,7 @@ ssl-monitor-nginx        Up
 ### Step 3: Access
 
 ```
-http://74.48.129.112
+http://YOUR_IP_ADDRESS
 ```
 
 **That's it!** Dashboard is ready to use.
@@ -95,7 +95,7 @@ Domain      | SSL Status  | Expired on | HTTPS | Redirect | Scan
 ### Via API:
 
 ```bash
-curl -X POST http://74.48.129.112:8080/api/domains \
+curl -X POST http://YOUR_IP_ADDRESS:8080/api/domains \
   -H "Content-Type: application/json" \
   -d '{"domain": "google.com"}'
 ```
@@ -166,16 +166,16 @@ SELECT COUNT(*) as results FROM ssl_scan_results;
 
 ```bash
 # Dashboard summary
-curl http://74.48.129.112:8080/api/dashboard/summary
+curl http://YOUR_IP_ADDRESS:8080/api/dashboard/summary
 
 # Domain list
-curl http://74.48.129.112:8080/api/domains
+curl http://YOUR_IP_ADDRESS:8080/api/domains
 ```
 
 ### 4. Check Frontend:
 
 ```bash
-curl -I http://74.48.129.112
+curl -I http://YOUR_IP_ADDRESS
 ```
 Should return: **HTTP/1.1 200 OK**
 
@@ -313,7 +313,7 @@ domain3.com
 Bulk add via API:
 ```bash
 DOMAINS=$(cat domains.txt | jq -R . | jq -s .)
-curl -X POST http://74.48.129.112:8080/api/domains/bulk \
+curl -X POST http://YOUR_IP_ADDRESS:8080/api/domains/bulk \
   -H "Content-Type: application/json" \
   -d "{\"domains\": $DOMAINS}"
 ```
@@ -322,13 +322,13 @@ curl -X POST http://74.48.129.112:8080/api/domains/bulk \
 
 ```bash
 # Export all
-curl http://74.48.129.112:8080/api/export/csv > ssl_report.csv
+curl http://YOUR_IP_ADDRESS:8080/api/export/csv > ssl_report.csv
 
 # Export only valid
-curl "http://74.48.129.112:8080/api/export/csv?ssl_status=VALID" > valid_ssl.csv
+curl "http://YOUR_IP_ADDRESS:8080/api/export/csv?ssl_status=VALID" > valid_ssl.csv
 
 # Export only expired soon
-curl "http://74.48.129.112:8080/api/export/csv?expired_soon=true" > expired_soon.csv
+curl "http://YOUR_IP_ADDRESS:8080/api/export/csv?expired_soon=true" > expired_soon.csv
 ```
 
 ### Delete all domains:
@@ -358,7 +358,7 @@ docker-compose exec -T mariadb mysql -ussluser -pSSL@Pass123 ssl_monitor < backu
 
 - [ ] Services running (`docker-compose ps`)
 - [ ] MariaDB healthy
-- [ ] Frontend accessible (http://74.48.129.112)
+- [ ] Frontend accessible (http://YOUR_IP_ADDRESS)
 - [ ] Backend API responding (port 8080)
 - [ ] Domains added (via UI or API)
 - [ ] Scanner completed first scan
@@ -390,6 +390,6 @@ docker-compose exec -T mariadb mysql -ussluser -pSSL@Pass123 ssl_monitor < backu
 **Deploy in 3 steps:**
 1. Extract
 2. `docker-compose up -d --build`
-3. Access http://74.48.129.112
+3. Access http://YOUR_IP_ADDRESS
 
 **That's it! Enjoy monitoring! 🔐**

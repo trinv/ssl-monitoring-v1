@@ -121,7 +121,7 @@ Should also show 200+ domains.
 ### 3. Check API
 
 ```bash
-curl http://74.48.129.112:8080/api/dashboard/summary
+curl http://YOUR_IP_ADDRESS:8080/api/dashboard/summary
 ```
 
 Should return:
@@ -137,7 +137,7 @@ Should return:
 
 ### 4. Check Dashboard
 
-Open: http://74.48.129.112
+Open: http://YOUR_IP_ADDRESS
 
 Should see:
 - Total Domains: 200+

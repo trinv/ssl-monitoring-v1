@@ -95,7 +95,7 @@ Should see:
 
 ### 2. Check Backend:
 ```bash
-curl http://74.48.129.112:8080/
+curl http://YOUR_IP_ADDRESS:8080/
 ```
 
 Expected response:
@@ -110,7 +110,7 @@ Expected response:
 
 ### 3. Check Frontend:
 ```bash
-curl -I http://74.48.129.112
+curl -I http://YOUR_IP_ADDRESS
 ```
 
 Expected:
@@ -121,7 +121,7 @@ Content-Type: text/html
 
 ### 4. Open Browser:
 ```
-http://74.48.129.112
+http://YOUR_IP_ADDRESS
 ```
 
 **Should see:**
@@ -138,7 +138,7 @@ http://74.48.129.112
 
 ### Via UI (Recommended):
 
-1. Open http://74.48.129.112
+1. Open http://YOUR_IP_ADDRESS
 2. Click **"Add Domain"** in left sidebar
 3. Enter domain: `google.com`
 4. Click **"Add Domain"**
@@ -147,7 +147,7 @@ http://74.48.129.112
 ### Via API:
 
 ```bash
-curl -X POST http://74.48.129.112:8080/api/domains \
+curl -X POST http://YOUR_IP_ADDRESS:8080/api/domains \
   -H "Content-Type: application/json" \
   -d '{"domain": "google.com"}'
 ```
@@ -210,7 +210,7 @@ Press Ctrl+C to stop watching logs.
 
 ## 📊 **Check Dashboard**
 
-Refresh browser: http://74.48.129.112
+Refresh browser: http://YOUR_IP_ADDRESS
 
 **Should now show:**
 - Total Domains: **1**
@@ -351,7 +351,7 @@ domain3.com
 Bulk add:
 ```bash
 DOMAINS=$(cat domains.txt | jq -R . | jq -s .)
-curl -X POST http://74.48.129.112:8080/api/domains/bulk \
+curl -X POST http://YOUR_IP_ADDRESS:8080/api/domains/bulk \
   -H "Content-Type: application/json" \
   -d "{\"domains\": $DOMAINS}"
 ```
@@ -360,13 +360,13 @@ curl -X POST http://74.48.129.112:8080/api/domains/bulk \
 
 ```bash
 # All domains
-curl http://74.48.129.112:8080/api/export/csv > report.csv
+curl http://YOUR_IP_ADDRESS:8080/api/export/csv > report.csv
 
 # Only valid
-curl "http://74.48.129.112:8080/api/export/csv?ssl_status=VALID" > valid.csv
+curl "http://YOUR_IP_ADDRESS:8080/api/export/csv?ssl_status=VALID" > valid.csv
 
 # Only expired soon
-curl "http://74.48.129.112:8080/api/export/csv?expired_soon=true" > expired.csv
+curl "http://YOUR_IP_ADDRESS:8080/api/export/csv?expired_soon=true" > expired.csv
 ```
 
 ### Backup database:
@@ -457,7 +457,7 @@ docker-compose up -d --build
 
 **Access:**
 ```
-http://74.48.129.112
+http://YOUR_IP_ADDRESS
 ```
 
 **Enjoy monitoring your SSL certificates! 🔐**

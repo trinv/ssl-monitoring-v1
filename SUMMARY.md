@@ -8,7 +8,7 @@
 
 | Thông số | Giá trị |
 |----------|---------|
-| **Server IP** | 74.48.129.112 |
+| **Server IP** | YOUR_IP_ADDRESS |
 | **Backend Port** | 8080 (không phải 8000) |
 | **Frontend Port** | 80 |
 | **Max Domains** | 50,000+ |
@@ -78,21 +78,21 @@ backend:
     - "8080:8080"  # Exposed on 8080
 ```
 
-### ✅ 2. IP address cố định 74.48.129.112
+### ✅ 2. IP address cố định YOUR_IP_ADDRESS
 
 ```javascript
 // frontend/login.html
-const API_BASE_URL = 'http://74.48.129.112:8080/api';
+const API_BASE_URL = 'http://YOUR_IP_ADDRESS:8080/api';
 
 // frontend/index.html
-const API_BASE_URL = 'http://74.48.129.112:8080/api';
+const API_BASE_URL = 'http://YOUR_IP_ADDRESS:8080/api';
 ```
 
 ```nginx
 # nginx/nginx.conf
 server {
     listen 80;
-    server_name 74.48.129.112;
+    server_name YOUR_IP_ADDRESS;
 }
 ```
 
@@ -162,7 +162,7 @@ await conn.copy_records_to_table(...)
 ### Bước 1: Upload
 ```bash
 # Upload thư mục domain-monitor lên server
-scp -r domain-monitor/ user@74.48.129.112:/path/to/
+scp -r domain-monitor/ user@YOUR_IP_ADDRESS:/path/to/
 ```
 
 ### Bước 2: Start
@@ -173,7 +173,7 @@ cd domain-monitor
 
 ### Bước 3: Access
 ```
-http://74.48.129.112
+http://YOUR_IP_ADDRESS
 admin / admin123
 ```
 
@@ -229,7 +229,7 @@ BATCH_SIZE=5000
 SCHEDULE_INTERVAL=3600
 
 # Server
-SERVER_IP=74.48.129.112
+SERVER_IP=YOUR_IP_ADDRESS
 ```
 
 ### Docker Compose Services
@@ -259,7 +259,7 @@ services:
 
 Sau khi deploy, test:
 
-- [ ] Access http://74.48.129.112
+- [ ] Access http://YOUR_IP_ADDRESS
 - [ ] Login với admin/admin123
 - [ ] Dashboard hiển thị 4 stats
 - [ ] Add domain test
@@ -314,7 +314,7 @@ Email: admin@example.com
 
 ### Common Issues & Solutions
 
-1. **Cannot access 74.48.129.112**
+1. **Cannot access YOUR_IP_ADDRESS**
    ```bash
    docker-compose logs nginx
    docker-compose restart nginx
@@ -346,7 +346,7 @@ Email: admin@example.com
 
 ✅ **Clean structure** - 15 files, no suffix  
 ✅ **Port 8080** - Backend configured correctly  
-✅ **IP 74.48.129.112** - Hardcoded in config  
+✅ **IP YOUR_IP_ADDRESS** - Hardcoded in config  
 ✅ **50k+ optimization** - Scanner can handle large scale  
 ✅ **Single version** - No v2, v3 confusion  
 ✅ **Production ready** - Docker, docs, scripts included  
@@ -406,9 +406,9 @@ cd domain-monitor
 
 ### IP & Port Configuration
 
-- **Frontend**: http://74.48.129.112 (port 80)
-- **Backend API**: http://74.48.129.112:8080
-- **Direct API test**: `curl http://74.48.129.112:8080/`
+- **Frontend**: http://YOUR_IP_ADDRESS (port 80)
+- **Backend API**: http://YOUR_IP_ADDRESS:8080
+- **Direct API test**: `curl http://YOUR_IP_ADDRESS:8080/`
 
 ### If IP Changes
 
@@ -430,7 +430,7 @@ For 50,000 domains:
 ## ✨ Ready to Deploy!
 
 Everything is configured and ready for production use on:
-- **Server**: 74.48.129.112
+- **Server**: YOUR_IP_ADDRESS
 - **Backend**: Port 8080
 - **Capacity**: 50,000+ domains
 

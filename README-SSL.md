@@ -99,7 +99,7 @@ docker-compose logs -f scanner
 ### 3. Access
 
 ```
-URL: http://74.48.129.112
+URL: http://YOUR_IP_ADDRESS
 ```
 
 **No login needed!** Direct access to SSL monitoring dashboard.

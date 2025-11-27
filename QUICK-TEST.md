@@ -44,7 +44,7 @@ ModuleNotFoundError
 ### 3. Test Backend API
 
 ```bash
-curl http://74.48.129.112:8080/
+curl http://YOUR_IP_ADDRESS:8080/
 ```
 
 **Expected response:**
@@ -61,7 +61,7 @@ curl http://74.48.129.112:8080/
 ### 4. Test Health Endpoint
 
 ```bash
-curl http://74.48.129.112:8080/health
+curl http://YOUR_IP_ADDRESS:8080/health
 ```
 
 **Expected:**
@@ -75,7 +75,7 @@ curl http://74.48.129.112:8080/health
 ### 5. Test Dashboard Summary
 
 ```bash
-curl http://74.48.129.112:8080/api/dashboard/summary
+curl http://YOUR_IP_ADDRESS:8080/api/dashboard/summary
 ```
 
 **Expected:**
@@ -92,7 +92,7 @@ curl http://74.48.129.112:8080/api/dashboard/summary
 ### 6. Test Frontend
 
 ```bash
-curl -I http://74.48.129.112
+curl -I http://YOUR_IP_ADDRESS
 ```
 
 **Expected:**
@@ -104,7 +104,7 @@ Content-Type: text/html
 ### 7. Open Browser
 
 ```
-http://74.48.129.112
+http://YOUR_IP_ADDRESS
 ```
 
 **Should see:**
@@ -189,7 +189,7 @@ Once all tests pass:
 
 ```bash
 # Add test domain
-curl -X POST http://74.48.129.112:8080/api/domains \
+curl -X POST http://YOUR_IP_ADDRESS:8080/api/domains \
   -H "Content-Type: application/json" \
   -d '{"domain": "google.com"}'
 

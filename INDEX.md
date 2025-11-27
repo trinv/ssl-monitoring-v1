@@ -10,7 +10,7 @@ Chào mừng bạn đến với **Domain Monitor** - Hệ thống giám sát 50,
 
 ## 🎯 Thông tin nhanh
 
-- **Server IP**: 74.48.129.112
+- **Server IP**: YOUR_IP_ADDRESS
 - **Backend Port**: 8080
 - **Frontend Port**: 80
 - **Authentication**: None - Direct access!
@@ -59,7 +59,7 @@ Hướng dẫn chi tiết:
 Hướng dẫn 3 bước:
 1. Cấu hình `.env`
 2. Run `./start.sh`
-3. Access http://74.48.129.112
+3. Access http://YOUR_IP_ADDRESS
 
 **Lưu ý:** Phải cấu hình `.env` trước!
 
@@ -144,7 +144,7 @@ domain-monitor/                    [18 files, ~155KB]
 1. **BẮT BUỘC:** Đọc [`CONFIGURATION.md`](./CONFIGURATION.md)
 2. Edit `.env` file
 3. Run `./start.sh`
-4. Access http://74.48.129.112
+4. Access http://YOUR_IP_ADDRESS
 
 ### 🔧 Tôi muốn customize
 1. Đọc [`CONFIGURATION.md`](./CONFIGURATION.md) → Các thông số
@@ -220,7 +220,7 @@ docker-compose stop
    DATABASE_URL=postgresql://domainuser:YOUR_SECURE_PASSWORD@postgres:5432/domains
    ```
 
-2. **IP Address** (nếu khác 74.48.129.112)
+2. **IP Address** (nếu khác YOUR_IP_ADDRESS)
    - `frontend/index.html` → API_BASE_URL
    - `nginx/nginx.conf` → server_name
 
@@ -341,7 +341,7 @@ Bạn đã sẵn sàng để:
 1. Đọc [`CONFIGURATION.md`](./CONFIGURATION.md) ← **BẮT BUỘC**
 2. Configure `.env`
 3. Run `./start.sh`
-4. Access http://74.48.129.112
+4. Access http://YOUR_IP_ADDRESS
 
 ---
 

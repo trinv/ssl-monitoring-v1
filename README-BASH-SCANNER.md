@@ -190,7 +190,7 @@ docker-compose logs -f scanner
 
 ### 3. Access:
 ```
-http://74.48.129.112
+http://YOUR_IP_ADDRESS
 ```
 
 ---
@@ -442,12 +442,12 @@ SELECT * FROM latest_ssl_status LIMIT 10;
 1. **Update Frontend** (see FRONTEND-TODO.md)
 2. **Add domains:**
    ```bash
-   curl -X POST http://74.48.129.112:8080/api/domains \
+   curl -X POST http://YOUR_IP_ADDRESS:8080/api/domains \
      -H "Content-Type: application/json" \
      -d '{"domain": "google.com"}'
    ```
 3. **Wait for scan** (auto every 1 hour)
-4. **Check dashboard:** http://74.48.129.112
+4. **Check dashboard:** http://YOUR_IP_ADDRESS
 
 ---
 

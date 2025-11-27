@@ -33,7 +33,7 @@ docker-compose up -d --build
 sleep 30
 
 # Access dashboard
-http://74.48.129.112
+http://YOUR_IP_ADDRESS
 ```
 
 ---
@@ -73,7 +73,7 @@ http://74.48.129.112
 
 ### Via API:
 ```bash
-curl -X POST http://74.48.129.112:8080/api/domains \
+curl -X POST http://YOUR_IP_ADDRESS:8080/api/domains \
   -H "Content-Type: application/json" \
   -d '{"domain": "google.com"}'
 ```
@@ -89,7 +89,7 @@ DOMAINS
 
 # Convert to JSON and add
 DOMAINS=$(cat domains.txt | jq -R . | jq -s .)
-curl -X POST http://74.48.129.112:8080/api/domains/bulk \
+curl -X POST http://YOUR_IP_ADDRESS:8080/api/domains/bulk \
   -H "Content-Type: application/json" \
   -d "{\"domains\": $DOMAINS}"
 ```
@@ -165,7 +165,7 @@ ssl-monitor-nginx      Up
 
 ### 2. Check Backend:
 ```bash
-curl http://74.48.129.112:8080/
+curl http://YOUR_IP_ADDRESS:8080/
 ```
 
 Expected:
@@ -179,14 +179,14 @@ Expected:
 
 ### 3. Check Frontend:
 ```bash
-curl -I http://74.48.129.112
+curl -I http://YOUR_IP_ADDRESS
 ```
 
 Expected: `HTTP/1.1 200 OK`
 
 ### 4. Add Test Domain:
 ```bash
-curl -X POST http://74.48.129.112:8080/api/domains \
+curl -X POST http://YOUR_IP_ADDRESS:8080/api/domains \
   -H "Content-Type: application/json" \
   -d '{"domain": "google.com"}'
 ```
@@ -208,7 +208,7 @@ RESULT:1|VALID|Mar 11 08:15:38 2025 GMT|105|200|-
 ```
 
 ### 6. Check Dashboard:
-Open: http://74.48.129.112
+Open: http://YOUR_IP_ADDRESS
 
 Should show:
 - Total Domains: 1
@@ -305,7 +305,7 @@ docker-compose up -d --build
 
 **Access:**
 ```
-http://74.48.129.112
+http://YOUR_IP_ADDRESS
 ```
 
 **Ready to monitor your SSL certificates! 🔐**

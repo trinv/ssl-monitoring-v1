@@ -262,7 +262,7 @@ Frontend hiện tại (20KB) cần được thay thế hoàn toàn với SSL mon
 
     <footer class="main-footer">
         <strong>SSL Certificate Monitor v2.0</strong>
-        <div class="float-right">Server: 74.48.129.112:8080</div>
+        <div class="float-right">Server: YOUR_IP_ADDRESS:8080</div>
     </footer>
 </div>
 
@@ -318,7 +318,7 @@ example3.com"></textarea>
 <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
 
 <script>
-const API_BASE_URL = 'http://74.48.129.112:8080/api';
+const API_BASE_URL = 'http://YOUR_IP_ADDRESS:8080/api';
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {

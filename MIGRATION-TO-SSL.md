@@ -326,7 +326,7 @@ docker-compose ps
 docker-compose exec postgres psql -U domainuser -d domains -c "\dt"
 
 # Check API
-curl http://74.48.129.112:8080/api/dashboard/summary
+curl http://YOUR_IP_ADDRESS:8080/api/dashboard/summary
 ```
 
 ---

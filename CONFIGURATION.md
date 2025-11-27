@@ -74,13 +74,13 @@ redis:
 
 ## 🌐 3. THAY ĐỔI IP ADDRESS
 
-### Nếu IP server khác 74.48.129.112
+### Nếu IP server khác YOUR_IP_ADDRESS
 
 #### File cần sửa: `frontend/index.html`
 
 ```javascript
 // Tìm dòng này (khoảng dòng 350)
-const API_BASE_URL = 'http://74.48.129.112:8080/api';
+const API_BASE_URL = 'http://YOUR_IP_ADDRESS:8080/api';
 
 // Thay đổi thành IP của bạn
 const API_BASE_URL = 'http://YOUR_SERVER_IP:8080/api';
@@ -91,7 +91,7 @@ const API_BASE_URL = 'http://YOUR_SERVER_IP:8080/api';
 ```nginx
 server {
     listen 80;
-    server_name 74.48.129.112;    # ⚠️ Thay đổi IP ở đây
+    server_name YOUR_IP_ADDRESS;    # ⚠️ Thay đổi IP ở đây
     
     # Hoặc dùng domain
     # server_name yourdomain.com;
@@ -429,7 +429,7 @@ SCAN_TIMEOUT=10            # Timeout (giây)
 SCHEDULE_INTERVAL=3600     # Khoảng cách scan (giây)
 
 # ==================== SERVER ====================
-SERVER_IP=74.48.129.112    # ⚠️ Thay đổi nếu cần
+SERVER_IP=YOUR_IP_ADDRESS    # ⚠️ Thay đổi nếu cần
 BACKEND_PORT=8080
 FRONTEND_PORT=80
 ```

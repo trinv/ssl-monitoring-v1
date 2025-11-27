@@ -130,7 +130,7 @@ docker-compose logs -f scanner
 ### 3. Access Dashboard
 
 ```
-http://74.48.129.112
+http://YOUR_IP_ADDRESS
 ```
 
 ---
@@ -316,13 +316,13 @@ SELECT * FROM dashboard_summary;
 
 ```bash
 # Dashboard summary
-curl http://74.48.129.112:8080/api/dashboard/summary
+curl http://YOUR_IP_ADDRESS:8080/api/dashboard/summary
 
 # Domain list
-curl http://74.48.129.112:8080/api/domains?limit=10
+curl http://YOUR_IP_ADDRESS:8080/api/domains?limit=10
 
 # Add domain
-curl -X POST http://74.48.129.112:8080/api/domains \
+curl -X POST http://YOUR_IP_ADDRESS:8080/api/domains \
   -H "Content-Type: application/json" \
   -d '{"domain": "google.com"}'
 ```
@@ -400,8 +400,8 @@ Services:
 
 - [ ] MariaDB running (`docker-compose ps`)
 - [ ] Scanner running (`docker-compose logs scanner`)
-- [ ] Backend API accessible (`curl http://74.48.129.112:8080`)
-- [ ] Frontend accessible (`http://74.48.129.112`)
+- [ ] Backend API accessible (`curl http://YOUR_IP_ADDRESS:8080`)
+- [ ] Frontend accessible (`http://YOUR_IP_ADDRESS`)
 - [ ] Domains added (`curl .../api/domains`)
 - [ ] Scanner has completed first run
 - [ ] Dashboard shows statistics

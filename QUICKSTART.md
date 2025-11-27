@@ -2,7 +2,7 @@
 
 ## 🎯 Version 1.1.0 - No Authentication
 
-- **Server**: 74.48.129.112:8080  
+- **Server**: YOUR_IP_ADDRESS:8080  
 - **Access**: Direct (no login needed)  
 - **Max Domains**: 50,000+
 
@@ -79,7 +79,7 @@ docker-compose logs -f
 ### 3️⃣ Truy cập
 
 ```
-URL: http://74.48.129.112
+URL: http://YOUR_IP_ADDRESS
 ```
 
 **Không cần login** - Truy cập trực tiếp dashboard!
@@ -124,7 +124,7 @@ DATABASE_URL=postgresql://domainuser:YOUR_SECURE_PASSWORD_HERE@postgres:5432/dom
 
 ---
 
-### 🌐 2. IP Address (Nếu khác 74.48.129.112)
+### 🌐 2. IP Address (Nếu khác YOUR_IP_ADDRESS)
 
 **File 1:** `frontend/index.html` (dòng ~350)
 
@@ -180,7 +180,7 @@ domain-monitor-nginx      Up
 ### 2. Backend API hoạt động
 
 ```bash
-curl http://74.48.129.112:8080/
+curl http://YOUR_IP_ADDRESS:8080/
 ```
 
 **Expected:**
@@ -198,7 +198,7 @@ curl http://74.48.129.112:8080/
 ### 3. Frontend accessible
 
 ```bash
-curl http://74.48.129.112/
+curl http://YOUR_IP_ADDRESS/
 ```
 
 **Expected:** HTML content of dashboard
@@ -219,7 +219,7 @@ docker-compose exec postgres psql -U domainuser -d domains -c "SELECT COUNT(*) F
 
 ### Truy cập
 ```
-http://74.48.129.112
+http://YOUR_IP_ADDRESS
 ```
 
 ### Features
@@ -253,7 +253,7 @@ http://74.48.129.112
 
 ## ❗ Troubleshooting
 
-### ❌ Cannot access http://74.48.129.112
+### ❌ Cannot access http://YOUR_IP_ADDRESS
 
 ```bash
 # Check services
@@ -287,7 +287,7 @@ docker-compose logs postgres
 docker-compose logs backend
 
 # Test API
-curl http://74.48.129.112:8080/
+curl http://YOUR_IP_ADDRESS:8080/
 
 # Restart
 docker-compose restart backend
