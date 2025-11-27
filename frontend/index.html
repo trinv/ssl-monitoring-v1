@@ -148,6 +148,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="#" class="nav-link" onclick="showBulkDeleteMenu(); return false;">
+                            <i class="nav-icon fas fa-trash-alt"></i>
+                            <p>Bulk Delete</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="#" class="nav-link" onclick="exportCSV(); return false;">
                             <i class="nav-icon fas fa-download"></i>
                             <p>Export CSV</p>
@@ -699,6 +705,14 @@ function showAddDomainModal() {
 
 function showBulkAddModal() {
     $('#bulkAddModal').modal('show');
+}
+
+function showBulkDeleteMenu() {
+    // Scroll to domain list
+    document.querySelector('.content-wrapper').scrollTop = document.getElementById('domainTableBody').offsetTop - 200;
+
+    // Show info message
+    alert('To delete domains:\n\n1. Select domains using checkboxes in the Domain List table\n2. Click "Delete Selected" button that appears\n\nYou can select multiple domains at once.');
 }
 
 // Add single domain
