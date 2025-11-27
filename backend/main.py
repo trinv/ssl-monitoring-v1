@@ -320,16 +320,56 @@ async def delete_domain(domain_id: int):
 async def bulk_delete_domains(bulk: DomainBulkDelete):
     if not bulk.domain_ids:
         raise HTTPException(status_code=400, detail="No domain IDs provided")
-    
+
     async with db_pool.acquire() as conn:
         result = await conn.execute(
             "DELETE FROM domains WHERE id = ANY($1::int[])",
             bulk.domain_ids
         )
-        
+
         count = int(result.split()[-1])
-        
+
         return {"message": f"Deleted {count} domains", "deleted_count": count}
+
+class DomainBulkDeleteByName(BaseModel):
+    domains: List[str]
+
+@app.post("/api/domains/bulk-delete-by-name")
+async def bulk_delete_domains_by_name(bulk: DomainBulkDeleteByName):
+    if not bulk.domains:
+        raise HTTPException(status_code=400, detail="No domains provided")
+
+    # Normalize domain names (lowercase, trim)
+    domain_names = [d.lower().strip() for d in bulk.domains if d.strip()]
+
+    if not domain_names:
+        raise HTTPException(status_code=400, detail="No valid domains provided")
+
+    async with db_pool.acquire() as conn:
+        # Find matching domains
+        rows = await conn.fetch(
+            "SELECT id, domain FROM domains WHERE LOWER(domain) = ANY($1::text[])",
+            domain_names
+        )
+
+        found_domains = [r['domain'] for r in rows]
+        domain_ids = [r['id'] for r in rows]
+        not_found = [d for d in domain_names if d not in [fd.lower() for fd in found_domains]]
+
+        deleted_count = 0
+        if domain_ids:
+            result = await conn.execute(
+                "DELETE FROM domains WHERE id = ANY($1::int[])",
+                domain_ids
+            )
+            deleted_count = int(result.split()[-1])
+
+        return {
+            "deleted_count": deleted_count,
+            "found_domains": found_domains,
+            "not_found_domains": not_found,
+            "message": f"Deleted {deleted_count} domains"
+        }
 
 @app.get("/api/export/csv")
 async def export_csv(ssl_status: Optional[str] = Query(None)):

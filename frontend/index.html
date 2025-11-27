@@ -818,7 +818,7 @@ async function bulkDeleteDomains() {
         return;
     }
 
-    const domains = text.split('\n').map(d => d.trim().toLowerCase()).filter(d => d);
+    const domains = text.split('\n').map(d => d.trim()).filter(d => d);
 
     if (domains.length === 0) {
         alert('No valid domains found');
@@ -830,46 +830,20 @@ async function bulkDeleteDomains() {
     }
 
     try {
-        // First, fetch all domains to get their IDs
-        const response = await fetch(`${API_BASE_URL}/domains?per_page=10000`);
-        const data = await response.json();
-        const allDomains = data.domains || data;
-
-        // Find matching domain IDs
-        const domainIdsToDelete = [];
-        const foundDomains = [];
-        const notFoundDomains = [];
-
-        domains.forEach(domainName => {
-            const found = allDomains.find(d => d.domain.toLowerCase() === domainName);
-            if (found) {
-                domainIdsToDelete.push(found.id);
-                foundDomains.push(domainName);
-            } else {
-                notFoundDomains.push(domainName);
-            }
-        });
-
-        if (domainIdsToDelete.length === 0) {
-            alert('None of the specified domains were found in the database.');
-            return;
-        }
-
-        // Delete the found domains
-        const deleteResponse = await fetch(`${API_BASE_URL}/domains/bulk-delete`, {
+        const response = await fetch(`${API_BASE_URL}/domains/bulk-delete-by-name`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ domain_ids: domainIdsToDelete })
+            body: JSON.stringify({ domains: domains })
         });
 
-        if (deleteResponse.ok) {
-            const result = await deleteResponse.json();
+        if (response.ok) {
+            const result = await response.json();
             let message = `Successfully deleted ${result.deleted_count} domains!`;
 
-            if (notFoundDomains.length > 0) {
-                message += `\n\nNot found (${notFoundDomains.length}):\n${notFoundDomains.slice(0, 10).join('\n')}`;
-                if (notFoundDomains.length > 10) {
-                    message += `\n... and ${notFoundDomains.length - 10} more`;
+            if (result.not_found_domains && result.not_found_domains.length > 0) {
+                message += `\n\nNot found (${result.not_found_domains.length}):\n${result.not_found_domains.slice(0, 10).join('\n')}`;
+                if (result.not_found_domains.length > 10) {
+                    message += `\n... and ${result.not_found_domains.length - 10} more`;
                 }
             }
 
@@ -879,11 +853,12 @@ async function bulkDeleteDomains() {
             loadDashboard();
             loadDomains();
         } else {
-            alert('Error deleting domains');
+            const error = await response.json();
+            alert(error.detail || 'Error deleting domains');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Error deleting domains');
+        alert('Error deleting domains: ' + error.message);
     }
 }
 
