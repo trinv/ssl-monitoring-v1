@@ -280,15 +280,30 @@ async def main():
     )
     
     logger.info("✅ Connected to database")
-    
+
+    TRIGGER_FILE = "/tmp/ssl_scan_trigger"
+
     while True:
         try:
             await perform_scan(pool)
-            
+
             logger.info(f"💤 Sleeping for {SCHEDULE_INTERVAL}s ({SCHEDULE_INTERVAL/60:.0f} minutes)")
+            logger.info("You can trigger immediate scan via API endpoint: POST /api/scan/trigger")
             logger.info("")
-            
-            await asyncio.sleep(SCHEDULE_INTERVAL)
+
+            # Sleep with periodic checks for trigger file (check every 10 seconds)
+            sleep_interval = 10
+            elapsed = 0
+
+            while elapsed < SCHEDULE_INTERVAL:
+                # Check if trigger file exists
+                if os.path.exists(TRIGGER_FILE):
+                    logger.info("⚡ Scan trigger detected! Starting immediate scan...")
+                    os.remove(TRIGGER_FILE)
+                    break
+
+                await asyncio.sleep(sleep_interval)
+                elapsed += sleep_interval
             
         except KeyboardInterrupt:
             logger.info("Received interrupt signal, shutting down...")

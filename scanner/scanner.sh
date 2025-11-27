@@ -241,11 +241,27 @@ main() {
     # Main scan loop
     while true; do
         perform_scan
-        
+
         log_info "Sleeping for ${SCAN_INTERVAL}s ($(($SCAN_INTERVAL / 60)) minutes)..."
+        log_info "You can trigger immediate scan via API endpoint: POST /api/scan/trigger"
         log_info ""
-        
-        sleep $SCAN_INTERVAL
+
+        # Sleep with periodic checks for trigger file
+        TRIGGER_FILE="/tmp/ssl_scan_trigger"
+        SLEEP_INTERVAL=10
+        ELAPSED=0
+
+        while [ $ELAPSED -lt $SCAN_INTERVAL ]; do
+            # Check if trigger file exists
+            if [ -f "$TRIGGER_FILE" ]; then
+                log_info "⚡ Scan trigger detected! Starting immediate scan..."
+                rm -f "$TRIGGER_FILE"
+                break
+            fi
+
+            sleep $SLEEP_INTERVAL
+            ELAPSED=$((ELAPSED + SLEEP_INTERVAL))
+        done
     done
 }
 

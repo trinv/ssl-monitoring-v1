@@ -377,7 +377,22 @@ async def export_csv(ssl_status: Optional[str] = Query(None)):
 
 @app.post("/api/scan/trigger")
 async def trigger_scan():
-    return {"message": "Scan will be triggered on next schedule"}
+    """Trigger immediate scan by creating a signal file"""
+    try:
+        # Create a trigger file that scanner will check
+        trigger_file = "/tmp/ssl_scan_trigger"
+        with open(trigger_file, 'w') as f:
+            f.write(datetime.now().isoformat())
+
+        logger.info("Scan trigger requested - signal file created")
+        return {
+            "status": "success",
+            "message": "Scan triggered successfully. Scanner will start within 10 seconds.",
+            "triggered_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error triggering scan: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to trigger scan: {str(e)}")
 
 @app.get("/health")
 async def health_check():

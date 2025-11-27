@@ -289,6 +289,9 @@
                     <div class="card-header">
                         <h3 class="card-title"><i class="fas fa-list"></i> Domain List</h3>
                         <div class="card-tools">
+                            <button type="button" class="btn btn-sm btn-success mr-2" onclick="triggerScan()">
+                                <i class="fas fa-sync"></i> Trigger Scan
+                            </button>
                             <span class="badge badge-info" id="domainCount">0 domains</span>
                         </div>
                     </div>
@@ -837,13 +840,50 @@ async function bulkDelete() {
     }
 }
 
+// Trigger immediate scan
+async function triggerScan() {
+    const button = event.target.closest('button');
+    const originalHtml = button.innerHTML;
+
+    // Show loading state
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Triggering...';
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/scan/trigger`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            alert('Scan triggered successfully! Scanner will start within 10 seconds.');
+
+            // Reload dashboard after a delay to show updated scan time
+            setTimeout(() => {
+                loadDashboard();
+                loadDomains();
+            }, 15000); // Wait 15 seconds before refreshing
+        } else {
+            alert('Error triggering scan');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error triggering scan');
+    } finally {
+        // Restore button state
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+    }
+}
+
 // Export CSV
 function exportCSV() {
     const sslStatus = document.getElementById('sslStatusFilter')?.value;
-    const url = sslStatus ? 
+    const url = sslStatus ?
         `${API_BASE_URL}/export/csv?ssl_status=${sslStatus}` :
         `${API_BASE_URL}/export/csv`;
-    
+
     window.location.href = url;
 }
 </script>
