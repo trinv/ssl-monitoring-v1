@@ -434,6 +434,35 @@ example3.com"></textarea>
     </div>
 </div>
 
+<!-- Bulk Delete Modal -->
+<div class="modal fade" id="bulkDeleteModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-danger">
+                <h4 class="modal-title text-white">Bulk Delete Domains</h4>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Warning:</strong> This will permanently delete all matching domains from the database.
+                </div>
+                <p>Paste domain list to delete (one per line):</p>
+                <textarea class="form-control" id="bulkDeleteDomains" rows="10" placeholder="example1.com
+example2.com
+example3.com"></textarea>
+                <small class="form-text text-muted">Enter one domain per line without http:// or https://</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="bulkDeleteDomains()">
+                    <i class="fas fa-trash"></i> Delete All
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
@@ -708,11 +737,7 @@ function showBulkAddModal() {
 }
 
 function showBulkDeleteMenu() {
-    // Scroll to domain list
-    document.querySelector('.content-wrapper').scrollTop = document.getElementById('domainTableBody').offsetTop - 200;
-
-    // Show info message
-    alert('To delete domains:\n\n1. Select domains using checkboxes in the Domain List table\n2. Click "Delete Selected" button that appears\n\nYou can select multiple domains at once.');
+    $('#bulkDeleteModal').modal('show');
 }
 
 // Add single domain
@@ -757,24 +782,24 @@ async function bulkAddDomains() {
         alert('Please enter domains');
         return;
     }
-    
+
     const domains = text.split('\n').map(d => d.trim()).filter(d => d);
-    
+
     if (domains.length === 0) {
         alert('No valid domains found');
         return;
     }
-    
+
     try {
         const response = await fetch(`${API_BASE_URL}/domains/bulk`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ domains })
         });
-        
+
         const result = await response.json();
         alert(`Success!\nAdded: ${result.total_added}\nFailed: ${result.total_failed}`);
-        
+
         $('#bulkAddModal').modal('hide');
         document.getElementById('bulkDomains').value = '';
         loadDashboard();
@@ -782,6 +807,83 @@ async function bulkAddDomains() {
     } catch (error) {
         console.error('Error:', error);
         alert('Error adding domains');
+    }
+}
+
+// Bulk delete domains by domain name
+async function bulkDeleteDomains() {
+    const text = document.getElementById('bulkDeleteDomains').value.trim();
+    if (!text) {
+        alert('Please enter domains to delete');
+        return;
+    }
+
+    const domains = text.split('\n').map(d => d.trim().toLowerCase()).filter(d => d);
+
+    if (domains.length === 0) {
+        alert('No valid domains found');
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${domains.length} domains?\n\nThis action cannot be undone!`)) {
+        return;
+    }
+
+    try {
+        // First, fetch all domains to get their IDs
+        const response = await fetch(`${API_BASE_URL}/domains?per_page=10000`);
+        const data = await response.json();
+        const allDomains = data.domains || data;
+
+        // Find matching domain IDs
+        const domainIdsToDelete = [];
+        const foundDomains = [];
+        const notFoundDomains = [];
+
+        domains.forEach(domainName => {
+            const found = allDomains.find(d => d.domain.toLowerCase() === domainName);
+            if (found) {
+                domainIdsToDelete.push(found.id);
+                foundDomains.push(domainName);
+            } else {
+                notFoundDomains.push(domainName);
+            }
+        });
+
+        if (domainIdsToDelete.length === 0) {
+            alert('None of the specified domains were found in the database.');
+            return;
+        }
+
+        // Delete the found domains
+        const deleteResponse = await fetch(`${API_BASE_URL}/domains/bulk-delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain_ids: domainIdsToDelete })
+        });
+
+        if (deleteResponse.ok) {
+            const result = await deleteResponse.json();
+            let message = `Successfully deleted ${result.deleted_count} domains!`;
+
+            if (notFoundDomains.length > 0) {
+                message += `\n\nNot found (${notFoundDomains.length}):\n${notFoundDomains.slice(0, 10).join('\n')}`;
+                if (notFoundDomains.length > 10) {
+                    message += `\n... and ${notFoundDomains.length - 10} more`;
+                }
+            }
+
+            alert(message);
+            $('#bulkDeleteModal').modal('hide');
+            document.getElementById('bulkDeleteDomains').value = '';
+            loadDashboard();
+            loadDomains();
+        } else {
+            alert('Error deleting domains');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error deleting domains');
     }
 }
 
