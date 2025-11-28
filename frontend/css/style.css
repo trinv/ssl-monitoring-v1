@@ -1,0 +1,213 @@
+/**
+ * SSL Certificate Monitoring - Custom Styles
+ */
+
+/* Stats Card Hover Effect */
+.stats-card {
+    transition: transform 0.2s;
+}
+
+.stats-card:hover {
+    transform: translateY(-5px);
+}
+
+/* Info Box Styles */
+.info-box {
+    box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+    border-radius: .25rem;
+    background-color: #fff;
+    display: flex;
+    margin-bottom: 1rem;
+    min-height: 80px;
+    padding: .5rem;
+    position: relative;
+    width: 100%;
+}
+
+.info-box .info-box-icon {
+    border-radius: .25rem;
+    align-items: center;
+    display: flex;
+    font-size: 1.875rem;
+    justify-content: center;
+    text-align: center;
+    width: 70px;
+}
+
+.info-box .info-box-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    line-height: 1.8;
+    flex: 1;
+    padding: 0 10px;
+}
+
+.info-box .info-box-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.info-box .info-box-number {
+    display: block;
+    font-weight: 700;
+    font-size: 1.5rem;
+}
+
+/* Bulk Actions */
+.bulk-actions {
+    display: none;
+    background-color: #fff3cd;
+    padding: 10px 15px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    border: 1px solid #ffc107;
+}
+
+.bulk-actions.show {
+    display: block;
+}
+
+/* Table Styles */
+.table-sm td, .table-sm th {
+    padding: 0.5rem;
+    vertical-align: middle;
+}
+
+/* Filter Section */
+.filter-section {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+/* Domain Cell */
+.domain-cell {
+    font-family: 'Courier New', monospace;
+    font-weight: 500;
+    color: #495057;
+}
+
+/* Redirect URL Display */
+.redirect-url {
+    font-size: 0.85rem;
+    color: #6c757d;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+}
+
+/* SSL Status Dots */
+.ssl-dot {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    margin: 0 2px;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 0 3px rgba(0,0,0,0.3);
+    transition: transform 0.2s;
+}
+
+.ssl-dot:hover {
+    transform: scale(1.3);
+}
+
+.ssl-dot.valid {
+    background-color: #28a745;
+}
+
+.ssl-dot.invalid {
+    background-color: #dc3545;
+}
+
+.ssl-dot.no-data {
+    background-color: #6c757d;
+}
+
+/* Expiry Badge Styles */
+.expiry-container {
+    display: inline-block;
+}
+
+.badge-expiry {
+    font-size: 1.1rem;
+    padding: 0.5rem 0.8rem;
+    font-weight: 600;
+    min-width: 120px;
+    text-align: center;
+}
+
+.badge-expired-soon {
+    background-color: #dc3545 !important;
+    color: white !important;
+    font-size: 16px !important;
+    padding: 8px 12px !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    line-height: 1.6 !important;
+    display: inline-block !important;
+}
+
+.badge-expired-ok {
+    background-color: #28a745 !important;
+    color: white !important;
+    font-size: 16px !important;
+    padding: 8px 12px !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    line-height: 1.6 !important;
+    display: inline-block !important;
+}
+
+/* HTTPS Status Badges (for future use) */
+.badge-https-2xx {
+    background-color: #28a745 !important;
+    color: white !important;
+}
+
+.badge-https-3xx {
+    background-color: #ffc107 !important;
+    color: #000 !important;
+}
+
+.badge-https-4xx, .badge-https-5xx, .badge-https-failed {
+    background-color: #dc3545 !important;
+    color: white !important;
+}
+
+/* Domain Cell */
+.domain-cell {
+    font-family: 'Courier New', monospace;
+    font-weight: 500;
+}
+
+/* Page Item Active State */
+.page-item.active .page-link {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .info-box .info-box-number {
+        font-size: 1.2rem;
+    }
+
+    .ssl-dot {
+        width: 14px;
+        height: 14px;
+    }
+
+    .badge-expiry {
+        font-size: 0.9rem;
+        padding: 0.3rem 0.5rem;
+        min-width: 100px;
+    }
+}
