@@ -271,15 +271,32 @@ async def main():
     """
     Main entry point
     """
-    # Connect to database
-    pool = await asyncpg.create_pool(
-        DATABASE_URL,
-        min_size=10,
-        max_size=50,
-        command_timeout=60
-    )
-    
-    logger.info("✅ Connected to database")
+    # Wait for database to be ready (retry logic)
+    logger.info("Waiting for PostgreSQL to be ready...")
+    pool = None
+    max_retries = 30
+    retry_delay = 2
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            pool = await asyncpg.create_pool(
+                DATABASE_URL,
+                min_size=10,
+                max_size=50,
+                command_timeout=60
+            )
+            logger.info("✅ Connected to database")
+            break
+        except Exception as e:
+            if attempt < max_retries:
+                logger.warning(f"PostgreSQL not ready (attempt {attempt}/{max_retries}), retrying in {retry_delay}s...")
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.error(f"Failed to connect to PostgreSQL after {max_retries} attempts: {e}")
+                raise
+
+    if not pool:
+        raise Exception("Failed to create database pool")
 
     TRIGGER_FILE = "/tmp/ssl_scan_trigger"
 
