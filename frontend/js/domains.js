@@ -64,9 +64,9 @@ function renderDomainTable(domains) {
             <td>${renderExpiryDate(d.ssl_expiry_date, d.days_until_expiry)}</td>
             <td>${d.scan_time || 'N/A'}</td>
             <td>
-                <span class="btn-check-ssl mr-2" onclick="checkSingleSSL(${d.id})" title="Click to check SSL for domain now">
-                    Check SSL
-                </span>
+                <button class="btn-check-ssl mr-2" onclick="checkSingleSSL(${d.id})" title="Click to check SSL for domain now">
+                    <i class="fas fa-shield-alt"></i> Check SSL
+                </button>
                 <button class="btn btn-sm btn-danger" onclick="deleteDomain(${d.id})" title="Delete">
                     <i class="fas fa-trash"></i>
                 </button>
