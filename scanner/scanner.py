@@ -14,7 +14,7 @@ import os
 import logging
 
 # Configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://domainuser:s3gs8Tu50ISwFu37@postgres:5432/domains")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://ssluser:SSL@Pass123@postgres:5432/ssl_monitor")
 SCAN_CONCURRENCY = int(os.getenv("SCAN_CONCURRENCY", "2000"))
 SCAN_TIMEOUT = int(os.getenv("SCAN_TIMEOUT", "10"))
 SCHEDULE_INTERVAL = int(os.getenv("SCHEDULE_INTERVAL", "3600"))

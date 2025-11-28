@@ -167,7 +167,9 @@ async def get_domains(
     expired_soon: Optional[bool] = Query(None),
     search: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    per_page: int = Query(100, ge=1, le=1000)
+    per_page: int = Query(100, ge=1, le=1000),
+    sort_by: Optional[str] = Query("domain"),
+    sort_order: Optional[str] = Query("asc")
 ):
     # Refresh materialized view
     await db_pool.execute("REFRESH MATERIALIZED VIEW latest_ssl_status")
@@ -192,6 +194,23 @@ async def get_domains(
 
     where_clause = " AND ".join(where_conditions)
 
+    # Build ORDER BY clause
+    allowed_sort_columns = {
+        "domain": "domain",
+        "ssl_status": "ssl_status",
+        "days_until_expiry": "days_until_expiry",
+        "scan_time": "scan_time"
+    }
+
+    sort_column = allowed_sort_columns.get(sort_by, "domain")
+    order_direction = "DESC" if sort_order.lower() == "desc" else "ASC"
+
+    # Special handling for NULL values in days_until_expiry
+    if sort_column == "days_until_expiry":
+        order_clause = f"{sort_column} {order_direction} NULLS LAST"
+    else:
+        order_clause = f"{sort_column} {order_direction}"
+
     async with db_pool.acquire() as conn:
         # Get total count
         total = await conn.fetchval(f"""
@@ -207,7 +226,7 @@ async def get_domains(
                 id, domain, ssl_status, ssl_expiry_timestamp, days_until_expiry, scan_time
             FROM latest_ssl_status
             WHERE {where_clause}
-            ORDER BY domain ASC
+            ORDER BY {order_clause}
             LIMIT ${param_count} OFFSET ${param_count + 1}
         """
         params.extend([per_page, offset])

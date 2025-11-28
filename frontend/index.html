@@ -332,10 +332,18 @@
                                         <th style="width: 40px;">
                                             <input type="checkbox" id="selectAll" onclick="toggleSelectAll()">
                                         </th>
-                                        <th style="width: 300px;">Domain</th>
-                                        <th style="width: 200px;">SSL Status History</th>
-                                        <th style="width: 200px;">Expired on</th>
-                                        <th style="width: 180px;">Last Scan</th>
+                                        <th style="width: 300px; cursor: pointer;" onclick="sortTable('domain')">
+                                            Domain <i id="sort-domain" class="fas fa-sort text-muted"></i>
+                                        </th>
+                                        <th style="width: 200px; cursor: pointer;" onclick="sortTable('ssl_status')">
+                                            SSL Status History <i id="sort-ssl_status" class="fas fa-sort text-muted"></i>
+                                        </th>
+                                        <th style="width: 200px; cursor: pointer;" onclick="sortTable('days_until_expiry')">
+                                            Expired on <i id="sort-days_until_expiry" class="fas fa-sort text-muted"></i>
+                                        </th>
+                                        <th style="width: 180px; cursor: pointer;" onclick="sortTable('scan_time')">
+                                            Last Scan <i id="sort-scan_time" class="fas fa-sort text-muted"></i>
+                                        </th>
                                         <th style="width: 80px;">Actions</th>
                                     </tr>
                                 </thead>
@@ -475,14 +483,19 @@ let currentPage = 1;
 let totalPages = 1;
 let totalDomains = 0;
 
+// Sorting state
+let currentSortBy = 'domain';
+let currentSortOrder = 'asc';
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     loadDashboard();
     loadDomains();
-    
+    updateSortIcons(); // Initialize sort icons
+
     // Auto-refresh every 60 seconds
     setInterval(loadDashboard, 60000);
-    
+
     // Enter key triggers search
     document.getElementById('searchInput').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') applyFilters();
@@ -518,6 +531,10 @@ async function loadDomains(page = 1) {
     if (search) params.append('search', search);
     if (sslStatus) params.append('ssl_status', sslStatus);
     if (expiryFilter === 'expired_soon') params.append('expired_soon', 'true');
+
+    // Add sorting parameters
+    params.append('sort_by', currentSortBy);
+    params.append('sort_order', currentSortOrder);
 
     try {
         const response = await fetch(`${API_BASE_URL}/domains?${params}`);
@@ -880,6 +897,42 @@ async function deleteDomain(id) {
     } catch (error) {
         console.error('Error:', error);
         alert('Error deleting domain');
+    }
+}
+
+// Sort table by column
+function sortTable(column) {
+    // Toggle sort order if clicking same column
+    if (currentSortBy === column) {
+        currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSortBy = column;
+        currentSortOrder = 'asc';
+    }
+
+    // Update sort icons
+    updateSortIcons();
+
+    // Reload data with new sort
+    currentPage = 1; // Reset to first page
+    loadDomains(currentPage);
+}
+
+// Update sort icons in table headers
+function updateSortIcons() {
+    // Reset all icons to default
+    document.querySelectorAll('th i[id^="sort-"]').forEach(icon => {
+        icon.className = 'fas fa-sort text-muted';
+    });
+
+    // Update current sort column icon
+    const currentIcon = document.getElementById(`sort-${currentSortBy}`);
+    if (currentIcon) {
+        if (currentSortOrder === 'asc') {
+            currentIcon.className = 'fas fa-sort-up text-primary';
+        } else {
+            currentIcon.className = 'fas fa-sort-down text-primary';
+        }
     }
 }
 
