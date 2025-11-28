@@ -33,6 +33,8 @@ services:
       DB_PASSWORD: SSL@Pass123
     ports:
       - "8080:8080"
+    volumes:
+      - scanner_triggers:/tmp
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,6 +56,8 @@ services:
       CONCURRENCY: 20
       TIMEOUT: 5
       TZ: UTC
+    volumes:
+      - scanner_triggers:/tmp
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,4 +85,6 @@ networks:
 
 volumes:
   postgres_data:
+    driver: local
+  scanner_triggers:
     driver: local
