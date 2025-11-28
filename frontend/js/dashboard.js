@@ -8,9 +8,9 @@ async function loadDashboard() {
         const data = await fetchDashboardSummary();
 
         document.getElementById('totalDomains').textContent = data.total_domains || 0;
-        document.getElementById('sslValid').textContent = data.ssl_valid_count || 0;
-        document.getElementById('expiredSoon').textContent = data.expired_soon_count || 0;
-        document.getElementById('failed').textContent = data.failed_count || 0;
+        document.getElementById('sslValidCount').textContent = data.ssl_valid_count || 0;
+        document.getElementById('expiredSoonCount').textContent = data.expired_soon_count || 0;
+        document.getElementById('failedCount').textContent = data.failed_count || 0;
 
         if (data.last_scan_time) {
             const lastScan = new Date(data.last_scan_time);
