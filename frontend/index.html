@@ -327,7 +327,23 @@
                                 <i class="fas fa-times"></i> Clear
                             </button>
                         </div>
-                        
+
+                        <!-- Top Pagination -->
+                        <div class="px-3 pt-3 pb-2">
+                            <div class="row">
+                                <div class="col-sm-12 col-md-5">
+                                    <div class="dataTables_info" id="paginationInfoTop">
+                                        Showing 0 to 0 of 0 entries
+                                    </div>
+                                </div>
+                                <div class="col-sm-12 col-md-7">
+                                    <ul class="pagination pagination-sm m-0 float-right" id="paginationControlsTop">
+                                        <!-- Pagination buttons will be rendered here -->
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="table-responsive">
                             <table class="table table-sm table-hover">
                                 <thead>
@@ -564,12 +580,17 @@ async function loadDomains(page = 1) {
 // Render pagination controls
 function renderPagination() {
     const paginationInfo = document.getElementById('paginationInfo');
+    const paginationInfoTop = document.getElementById('paginationInfoTop');
     const paginationControls = document.getElementById('paginationControls');
+    const paginationControlsTop = document.getElementById('paginationControlsTop');
 
     // Update info text
     const start = totalDomains > 0 ? ((currentPage - 1) * 100) + 1 : 0;
     const end = Math.min(currentPage * 100, totalDomains);
-    paginationInfo.textContent = `Showing ${start} to ${end} of ${totalDomains} entries`;
+    const infoText = `Showing ${start} to ${end} of ${totalDomains} entries`;
+
+    paginationInfo.textContent = infoText;
+    paginationInfoTop.textContent = infoText;
 
     // Generate pagination buttons
     let html = '';
@@ -614,6 +635,7 @@ function renderPagination() {
     </li>`;
 
     paginationControls.innerHTML = html;
+    paginationControlsTop.innerHTML = html;
 }
 
 // Change page
@@ -1042,18 +1064,24 @@ async function triggerScan() {
 // Check SSL for selected domains
 async function checkSelectedSSL() {
     const selectedCheckboxes = document.querySelectorAll('.domain-checkbox:checked');
+    console.log('Selected checkboxes:', selectedCheckboxes.length);
+
     if (selectedCheckboxes.length === 0) {
         alert('Please select at least one domain');
         return;
     }
 
     const domainIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
+    console.log('Domain IDs to scan:', domainIds);
 
     if (!confirm(`Check SSL for ${domainIds.length} selected domain(s)?`)) {
         return;
     }
 
     try {
+        console.log('Sending request to:', `${API_BASE_URL}/scan/domains`);
+        console.log('Request body:', { domain_ids: domainIds });
+
         const response = await fetch(`${API_BASE_URL}/scan/domains`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1062,7 +1090,7 @@ async function checkSelectedSSL() {
 
         if (response.ok) {
             const data = await response.json();
-            alert(`SSL scan triggered for ${data.domain_count} domain(s). Scanner will start within 60 seconds.`);
+            alert(`SSL scan triggered for ${data.domain_count} domain(s). Scanner will start within 5 seconds.`);
 
             // Clear selection
             clearSelection();
@@ -1071,7 +1099,7 @@ async function checkSelectedSSL() {
             setTimeout(() => {
                 loadDashboard();
                 loadDomains();
-            }, 65000); // Wait 65 seconds
+            }, 10000); // Wait 10 seconds
         } else {
             const error = await response.json();
             alert(`Error: ${error.detail || 'Failed to trigger scan'}`);
@@ -1097,13 +1125,13 @@ async function checkSingleSSL(domainId) {
 
         if (response.ok) {
             const data = await response.json();
-            alert(`SSL scan triggered for: ${data.domains[0]}. Scanner will start within 60 seconds.`);
+            alert(`SSL scan triggered for: ${data.domains[0]}. Scanner will start within 5 seconds.`);
 
             // Reload dashboard and domains after delay
             setTimeout(() => {
                 loadDashboard();
                 loadDomains();
-            }, 65000); // Wait 65 seconds
+            }, 10000); // Wait 10 seconds
         } else {
             const error = await response.json();
             alert(`Error: ${error.detail || 'Failed to trigger scan'}`);

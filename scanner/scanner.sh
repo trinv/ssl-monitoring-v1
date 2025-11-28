@@ -296,8 +296,8 @@ main() {
         log_info "You can trigger immediate scan via API endpoint: POST /api/scan/trigger"
         log_info ""
 
-        # Sleep with periodic checks for trigger file (check every 60 seconds)
-        SLEEP_INTERVAL=60
+        # Sleep with periodic checks for trigger file (check every 5 seconds)
+        SLEEP_INTERVAL=5
         ELAPSED=0
 
         while [ $ELAPSED -lt $SECONDS_TO_WAIT ]; do

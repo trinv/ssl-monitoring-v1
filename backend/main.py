@@ -449,7 +449,7 @@ async def trigger_scan():
         logger.info("Full scan trigger requested - signal file created")
         return {
             "status": "success",
-            "message": "Full scan triggered successfully. Scanner will start within 60 seconds.",
+            "message": "Full scan triggered successfully. Scanner will start within 5 seconds.",
             "triggered_at": datetime.now().isoformat()
         }
     except Exception as e:
@@ -489,7 +489,7 @@ async def scan_specific_domains(request: ScanDomainsRequest):
 
         return {
             "status": "success",
-            "message": f"Scan triggered for {len(domain_names)} domains. Scanner will start within 60 seconds.",
+            "message": f"Scan triggered for {len(domain_names)} domains. Scanner will start within 5 seconds.",
             "triggered_at": datetime.now().isoformat(),
             "domain_count": len(domain_names),
             "domains": domain_names
