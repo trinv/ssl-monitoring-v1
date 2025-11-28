@@ -1,17 +1,20 @@
-FROM python:3.11-slim
+FROM debian:bullseye-slim
 
-# Install required packages
+# Install required packages for bash scanner
 RUN apt-get update && apt-get install -y \
+    bash \
+    openssl \
+    curl \
+    postgresql-client \
+    bc \
+    coreutils \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy requirements and install
-COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
-
 # Copy scanner script
-COPY scanner.py /app/
+COPY scanner.sh /app/
+RUN chmod +x /app/scanner.sh
 
 # Run scanner
-CMD ["python", "/app/scanner.py"]
+CMD ["/app/scanner.sh"]

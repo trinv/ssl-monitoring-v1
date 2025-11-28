@@ -51,10 +51,9 @@ services:
       DB_NAME: ssl_monitor
       DB_USER: ssluser
       DB_PASSWORD: SSL@Pass123
-      SCAN_CONCURRENCY: 2000
-      SCAN_TIMEOUT: 10
-      SCHEDULE_INTERVAL: 3600
-      BATCH_SIZE: 5000
+      CONCURRENCY: 20
+      TIMEOUT: 5
+      SCAN_INTERVAL: 3600
     depends_on:
       postgres:
         condition: service_healthy
