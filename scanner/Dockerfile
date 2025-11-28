@@ -1,21 +1,17 @@
-FROM ubuntu:22.04
+FROM python:3.11-slim
 
 # Install required packages
 RUN apt-get update && apt-get install -y \
-    bash \
-    openssl \
-    curl \
-    postgresql-client \
-    bc \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy scanner script
-COPY scanner.sh /app/
+# Copy requirements and install
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Make executable
-RUN chmod +x /app/scanner.sh
+# Copy scanner script
+COPY scanner.py /app/
 
 # Run scanner
-CMD ["/app/scanner.sh"]
+CMD ["python", "/app/scanner.py"]
