@@ -1,4 +1,4 @@
-#version: '3.8'
+version: '3.8'
 
 services:
   postgres:
@@ -46,7 +46,11 @@ services:
       dockerfile: Dockerfile
     container_name: ssl-monitor-scanner
     environment:
-      DATABASE_URL: postgresql://ssluser:SSL@Pass123@postgres:5432/ssl_monitor
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ssl_monitor
+      DB_USER: ssluser
+      DB_PASSWORD: SSL@Pass123
       SCAN_CONCURRENCY: 2000
       SCAN_TIMEOUT: 10
       SCHEDULE_INTERVAL: 3600

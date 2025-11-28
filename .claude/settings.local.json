@@ -3,7 +3,9 @@
     "allow": [
       "Bash(docker-compose restart:*)",
       "Bash(docker compose:*)",
-      "Bash(docker rmi:*)"
+      "Bash(docker rmi:*)",
+      "Bash(docker network inspect:*)",
+      "Bash(docker exec:*)"
     ],
     "deny": [],
     "ask": []

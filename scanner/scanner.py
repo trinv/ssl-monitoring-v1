@@ -14,7 +14,19 @@ import os
 import logging
 
 # Configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://ssluser:SSL@Pass123@postgres:5432/ssl_monitor")
+# Try multiple database host options for Docker networking compatibility
+DB_HOST = os.getenv("DB_HOST", "postgres")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = os.getenv("DB_NAME", "ssl_monitor")
+DB_USER = os.getenv("DB_USER", "ssluser")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "SSL@Pass123")
+
+# Build DATABASE_URL from components (allows env override)
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+)
+
 SCAN_CONCURRENCY = int(os.getenv("SCAN_CONCURRENCY", "2000"))
 SCAN_TIMEOUT = int(os.getenv("SCAN_TIMEOUT", "10"))
 SCHEDULE_INTERVAL = int(os.getenv("SCHEDULE_INTERVAL", "3600"))
@@ -37,18 +49,26 @@ async def get_ssl_certificate(domain: str, timeout: int = 10) -> Optional[Dict]:
         context = ssl.create_default_context()
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
-        
-        # Create socket connection with timeout
-        sock = socket.create_connection((domain, 443), timeout=timeout)
-        ssock = context.wrap_socket(sock, server_hostname=domain)
-        
-        # Get certificate
-        cert = ssock.getpeercert()
-        
-        if not cert:
+
+        # Use asyncio.wait_for to wrap the blocking socket call
+        loop = asyncio.get_event_loop()
+
+        def _get_cert():
+            sock = socket.create_connection((domain, 443), timeout=timeout)
+            ssock = context.wrap_socket(sock, server_hostname=domain)
+            cert = ssock.getpeercert()
             ssock.close()
+            return cert
+
+        # Run blocking operation in thread pool
+        cert = await asyncio.wait_for(
+            loop.run_in_executor(None, _get_cert),
+            timeout=timeout
+        )
+
+        if not cert:
             return None
-        
+
         # Parse expiry date
         expiry_str = cert.get('notAfter')
         if expiry_str:
@@ -56,21 +76,19 @@ async def get_ssl_certificate(domain: str, timeout: int = 10) -> Optional[Dict]:
             expiry_date = datetime.strptime(expiry_str, '%b %d %H:%M:%S %Y %Z')
         else:
             expiry_date = None
-        
+
         # Get issuer and subject
         issuer = dict(x[0] for x in cert.get('issuer', []))
         subject = dict(x[0] for x in cert.get('subject', []))
-        
-        ssock.close()
-        
+
         return {
             'valid': True,
             'expiry_date': expiry_date,
             'issuer': issuer.get('organizationName', 'Unknown'),
             'subject': subject.get('commonName', domain)
         }
-        
-    except (socket.timeout, socket.gaierror, ssl.SSLError, ConnectionRefusedError, OSError) as e:
+
+    except (socket.timeout, socket.gaierror, ssl.SSLError, ConnectionRefusedError, OSError, asyncio.TimeoutError) as e:
         return None
     except Exception as e:
         logger.error(f"SSL certificate error for {domain}: {e}")
@@ -273,27 +291,50 @@ async def main():
     """
     # Wait for database to be ready (retry logic)
     logger.info("Waiting for PostgreSQL to be ready...")
+    logger.info(f"Database configuration: host={DB_HOST}, port={DB_PORT}, database={DB_NAME}, user={DB_USER}")
+    logger.info(f"Connection URL: postgresql://{DB_USER}:***@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+
     pool = None
     max_retries = 30
     retry_delay = 2
 
+    # Try multiple hostnames in case of Docker DNS issues
+    hosts_to_try = [
+        DB_HOST,  # Service name from docker-compose
+        "ssl-monitor-postgres",  # Container name
+        "127.0.0.1" if DB_HOST == "localhost" else None,
+    ]
+    hosts_to_try = [h for h in hosts_to_try if h]  # Remove None values
+
     for attempt in range(1, max_retries + 1):
-        try:
-            pool = await asyncpg.create_pool(
-                DATABASE_URL,
-                min_size=10,
-                max_size=50,
-                command_timeout=60
-            )
-            logger.info("✅ Connected to database")
+        for host in hosts_to_try:
+            try:
+                db_url = f"postgresql://{DB_USER}:{DB_PASSWORD}@{host}:{DB_PORT}/{DB_NAME}"
+                logger.info(f"Attempt {attempt}/{max_retries}: Trying to connect to {host}...")
+
+                pool = await asyncpg.create_pool(
+                    db_url,
+                    min_size=10,
+                    max_size=50,
+                    command_timeout=60,
+                    timeout=5  # 5 second connection timeout
+                )
+                logger.info(f"✅ Connected to database at {host}")
+                break
+            except Exception as e:
+                logger.warning(f"Failed to connect to {host}: {e}")
+                continue
+
+        if pool:
             break
-        except Exception as e:
-            if attempt < max_retries:
-                logger.warning(f"PostgreSQL not ready (attempt {attempt}/{max_retries}), retrying in {retry_delay}s...")
-                await asyncio.sleep(retry_delay)
-            else:
-                logger.error(f"Failed to connect to PostgreSQL after {max_retries} attempts: {e}")
-                raise
+
+        if attempt < max_retries:
+            logger.warning(f"All hosts failed (attempt {attempt}/{max_retries}), retrying in {retry_delay}s...")
+            await asyncio.sleep(retry_delay)
+        else:
+            logger.error(f"Failed to connect to PostgreSQL after {max_retries} attempts")
+            logger.error(f"Tried hosts: {hosts_to_try}")
+            raise Exception("Cannot connect to PostgreSQL - DNS resolution or network issue")
 
     if not pool:
         raise Exception("Failed to create database pool")
