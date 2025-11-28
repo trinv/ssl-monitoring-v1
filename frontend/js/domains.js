@@ -5,8 +5,25 @@
 // ==================== Domain Loading ====================
 
 async function loadDomains(page = 1) {
+    const params = new URLSearchParams();
+
+    const search = document.getElementById('searchInput')?.value;
+    const sslStatus = document.getElementById('sslStatusFilter')?.value;
+    const expiryFilter = document.getElementById('expiryFilter')?.value;
+
+    params.append('page', page);
+    params.append('per_page', '100');
+
+    if (search) params.append('search', search);
+    if (sslStatus) params.append('ssl_status', sslStatus);
+    if (expiryFilter === 'expired_soon') params.append('expired_soon', 'true');
+
+    params.append('sort_by', currentSortBy);
+    params.append('sort_order', currentSortOrder);
+
     try {
-        const data = await fetchDomains(page, currentFilters, currentSortBy, currentSortOrder);
+        const response = await fetch(`${API_BASE_URL}/domains?${params}`);
+        const data = await response.json();
 
         if (data.domains) {
             currentPage = data.page || 1;
@@ -69,30 +86,31 @@ function renderSSLStatusDots(history) {
         return '<span class="ssl-dot no-data" title="No scan data"></span>';
     }
 
-    const sortedHistory = [...history].reverse();
-    return sortedHistory.slice(0, 5).map(h => {
-        const cssClass = h.ssl_status === 'VALID' ? 'valid' : 'invalid';
-        const title = `${h.ssl_status} - ${h.scan_time}${h.days_until_expiry !== null ? ` (${h.days_until_expiry} days)` : ''}`;
-        return `<span class="ssl-dot ${cssClass}" data-toggle="tooltip" title="${title}"></span>`;
+    const dots = history.slice(0, 5).reverse().map(h => {
+        const cssClass = h.ssl_status === 'VALID' ? 'valid' : (h.ssl_status === 'INVALID' ? 'invalid' : 'no-data');
+        const statusText = h.ssl_status || 'Unknown';
+        const scanTime = h.scan_time || 'N/A';
+        const tooltip = `${statusText} - ${scanTime}`;
+
+        return `<span class="ssl-dot ${cssClass}" data-toggle="tooltip" title="${tooltip}"></span>`;
     }).join('');
+
+    return dots || '<span class="ssl-dot no-data" title="No data"></span>';
 }
 
-function renderExpiryDate(expiryDate, daysUntilExpiry) {
-    if (!expiryDate || daysUntilExpiry === null) {
-        return '<span class="badge badge-secondary badge-expiry">N/A</span>';
+function renderExpiryDate(expiryDate, daysUntil) {
+    if (!expiryDate || expiryDate === '-' || expiryDate === 'NO_SSL') {
+        return '<span class="badge badge-secondary" style="font-size: 14px; padding: 8px 12px;">N/A</span>';
     }
 
-    let badgeClass = 'badge-success';
-    if (daysUntilExpiry < 7) {
-        badgeClass = 'badge-danger';
-    } else if (daysUntilExpiry < 30) {
-        badgeClass = 'badge-warning';
+    if (daysUntil === null || daysUntil === undefined) {
+        return `<span class="badge badge-secondary" style="font-size: 14px; padding: 8px 12px;">${escapeHtml(expiryDate)}</span>`;
     }
 
-    return `<div class="expiry-container">
-        <span class="badge ${badgeClass} badge-expiry">${expiryDate}</span>
-        <div class="text-muted small mt-1">${daysUntilExpiry} days left</div>
-    </div>`;
+    const badgeClass = daysUntil < 7 ? 'badge-expired-soon' : 'badge-expired-ok';
+    const dateStr = expiryDate.includes('GMT') ? new Date(expiryDate).toISOString().split('T')[0] : expiryDate;
+
+    return `<span class="badge ${badgeClass}">${escapeHtml(dateStr)} - ${daysUntil} days</span>`;
 }
 
 function renderPagination() {
@@ -150,64 +168,104 @@ function renderPagination() {
     paginationControlsTop.innerHTML = html;
 }
 
+// ==================== Modal Functions ====================
+
+function showAddDomainModal() {
+    $('#addDomainModal').modal('show');
+}
+
+function showBulkAddModal() {
+    $('#bulkAddModal').modal('show');
+}
+
+function showBulkDeleteMenu() {
+    $('#bulkDeleteModal').modal('show');
+}
+
 // ==================== Domain CRUD Operations ====================
 
 async function addDomain() {
-    const domain = prompt('Enter domain name:');
-    if (!domain) return;
+    const domain = document.getElementById('newDomain').value.trim();
+    const notes = document.getElementById('domainNotes').value.trim();
+
+    if (!domain) {
+        alert('Please enter a domain');
+        return;
+    }
 
     try {
-        await createDomain(domain.trim());
-        alert('Domain added successfully');
-        loadDomains(currentPage);
-        loadDashboard();
+        const response = await fetch(`${API_BASE_URL}/domains`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain, notes: notes || null })
+        });
+
+        if (response.ok) {
+            $('#addDomainModal').modal('hide');
+            document.getElementById('newDomain').value = '';
+            document.getElementById('domainNotes').value = '';
+
+            alert('Domain added successfully!');
+            loadDashboard();
+            loadDomains();
+        } else {
+            const error = await response.json();
+            alert(error.detail || 'Error adding domain');
+        }
     } catch (error) {
         console.error('Error:', error);
         alert('Error adding domain');
     }
 }
 
-async function addDomainsBulk() {
-    $('#bulkAddModal').modal('show');
-}
-
 async function bulkAddDomains() {
-    const domainsText = document.getElementById('bulkDomainsInput').value;
-    if (!domainsText.trim()) {
-        alert('Please enter at least one domain');
+    const text = document.getElementById('bulkDomains').value.trim();
+    if (!text) {
+        alert('Please enter domains');
         return;
     }
 
-    const domains = domainsText.split('\n').map(d => d.trim()).filter(d => d.length > 0);
+    const domains = text.split('\n').map(d => d.trim()).filter(d => d);
+
+    if (domains.length === 0) {
+        alert('No valid domains found');
+        return;
+    }
 
     try {
-        const result = await createDomainsBulk(domains);
+        const response = await fetch(`${API_BASE_URL}/domains/bulk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domains })
+        });
 
-        let message = `Added ${result.total_added} domain(s)`;
-        if (result.total_failed > 0) {
-            message += `\nFailed: ${result.total_failed} domain(s)`;
-        }
-        alert(message);
+        const result = await response.json();
+        alert(`Success!\nAdded: ${result.total_added}\nFailed: ${result.total_failed}`);
 
         $('#bulkAddModal').modal('hide');
-        document.getElementById('bulkDomainsInput').value = '';
-
-        loadDomains(currentPage);
+        document.getElementById('bulkDomains').value = '';
         loadDashboard();
+        loadDomains();
     } catch (error) {
         console.error('Error:', error);
         alert('Error adding domains');
     }
 }
 
-async function deleteSingleDomain(domainId) {
+async function deleteDomain(id) {
     if (!confirm('Are you sure you want to delete this domain?')) return;
 
     try {
-        await deleteDomain(domainId);
-        alert('Domain deleted successfully');
-        loadDomains(currentPage);
-        loadDashboard();
+        const response = await fetch(`${API_BASE_URL}/domains/${id}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            loadDashboard();
+            loadDomains();
+        } else {
+            alert('Error deleting domain');
+        }
     } catch (error) {
         console.error('Error:', error);
         alert('Error deleting domain');
@@ -215,64 +273,81 @@ async function deleteSingleDomain(domainId) {
 }
 
 async function bulkDelete() {
-    const selectedCheckboxes = document.querySelectorAll('.domain-checkbox:checked');
-    if (selectedCheckboxes.length === 0) {
-        alert('Please select at least one domain');
-        return;
-    }
+    const ids = Array.from(document.querySelectorAll('.domain-checkbox:checked'))
+        .map(cb => parseInt(cb.value));
 
-    const domainIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
+    if (ids.length === 0) return;
 
-    if (!confirm(`Delete ${domainIds.length} selected domain(s)?`)) {
-        return;
-    }
+    if (!confirm(`Are you sure you want to delete ${ids.length} domains?`)) return;
 
     try {
-        await deleteDomainsBulk(domainIds);
-        alert(`Deleted ${domainIds.length} domain(s)`);
-        clearSelection();
-        loadDomains(currentPage);
-        loadDashboard();
+        const response = await fetch(`${API_BASE_URL}/domains/bulk-delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain_ids: ids })
+        });
+
+        if (response.ok) {
+            clearSelection();
+            loadDashboard();
+            loadDomains();
+        } else {
+            alert('Error deleting domains');
+        }
     } catch (error) {
         console.error('Error:', error);
         alert('Error deleting domains');
     }
-}
-
-async function bulkDeleteByName() {
-    $('#bulkDeleteModal').modal('show');
 }
 
 async function bulkDeleteDomains() {
-    const domainsText = document.getElementById('bulkDeleteInput').value;
-    if (!domainsText.trim()) {
-        alert('Please enter at least one domain');
+    const text = document.getElementById('bulkDeleteDomains').value.trim();
+    if (!text) {
+        alert('Please enter domains to delete');
         return;
     }
 
-    const domains = domainsText.split('\n').map(d => d.trim()).filter(d => d.length > 0);
+    const domains = text.split('\n').map(d => d.trim()).filter(d => d);
 
-    if (!confirm(`Delete ${domains.length} domain(s)?`)) {
+    if (domains.length === 0) {
+        alert('No valid domains found');
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${domains.length} domains?\n\nThis action cannot be undone!`)) {
         return;
     }
 
     try {
-        const result = await deleteDomainsByName(domains);
+        const response = await fetch(`${API_BASE_URL}/domains/bulk-delete-by-name`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domains: domains })
+        });
 
-        let message = `Deleted ${result.deleted_count} domain(s)`;
-        if (result.not_found_domains.length > 0) {
-            message += `\nNot found: ${result.not_found_domains.length} domain(s)`;
+        if (response.ok) {
+            const result = await response.json();
+            let message = `Successfully deleted ${result.deleted_count} domains!`;
+
+            if (result.not_found_domains && result.not_found_domains.length > 0) {
+                message += `\n\nNot found (${result.not_found_domains.length}):\n${result.not_found_domains.slice(0, 10).join('\n')}`;
+                if (result.not_found_domains.length > 10) {
+                    message += `\n... and ${result.not_found_domains.length - 10} more`;
+                }
+            }
+
+            alert(message);
+            $('#bulkDeleteModal').modal('hide');
+            document.getElementById('bulkDeleteDomains').value = '';
+            loadDashboard();
+            loadDomains();
+        } else {
+            const error = await response.json();
+            alert(error.detail || 'Error deleting domains');
         }
-        alert(message);
-
-        $('#bulkDeleteModal').modal('hide');
-        document.getElementById('bulkDeleteInput').value = '';
-
-        loadDomains(currentPage);
-        loadDashboard();
     } catch (error) {
         console.error('Error:', error);
-        alert('Error deleting domains');
+        alert('Error deleting domains: ' + error.message);
     }
 }
 
@@ -421,9 +496,65 @@ function clearSelection() {
 }
 
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    if (!text) return '';
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.toString().replace(/[&<>"']/g, m => map[m]);
+}
+
+function applyFilters() {
+    const search = document.getElementById('searchInput')?.value || '';
+    const sslStatus = document.getElementById('sslStatusFilter')?.value || '';
+    const expiryFilter = document.getElementById('expiryFilter')?.value || '';
+
+    currentFilters = {
+        search: search,
+        sslStatus: sslStatus || null,
+        expiredSoon: expiryFilter === 'expired_soon'
+    };
+
+    currentPage = 1;
+    loadDomains(1);
+}
+
+function applyQuickFilter(type) {
+    document.getElementById('sslStatusFilter').value = '';
+    document.getElementById('expiryFilter').value = '';
+    document.getElementById('searchInput').value = '';
+
+    switch(type) {
+        case 'valid':
+            document.getElementById('sslStatusFilter').value = 'VALID';
+            break;
+        case 'expired':
+            document.getElementById('expiryFilter').value = 'expired_soon';
+            break;
+        case 'failed':
+            document.getElementById('sslStatusFilter').value = 'INVALID';
+            break;
+    }
+
+    currentPage = 1;
+    loadDomains(1);
+}
+
+function refreshData() {
+    loadDashboard();
+    loadDomains();
+}
+
+function exportCSV() {
+    const sslStatus = document.getElementById('sslStatusFilter')?.value;
+    const url = sslStatus ?
+        `${API_BASE_URL}/export/csv?ssl_status=${sslStatus}` :
+        `${API_BASE_URL}/export/csv`;
+
+    window.location.href = url;
 }
 
 // ==================== Initialize ====================
@@ -431,4 +562,10 @@ function escapeHtml(text) {
 document.addEventListener('DOMContentLoaded', function () {
     initDashboard();
     loadDomains(1);
+    updateSortIcons();
+
+    // Enter key triggers search
+    document.getElementById('searchInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') applyFilters();
+    });
 });
