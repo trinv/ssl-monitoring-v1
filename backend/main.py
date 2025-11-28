@@ -434,23 +434,70 @@ async def export_csv(ssl_status: Optional[str] = Query(None)):
             }
         )
 
+class ScanDomainsRequest(BaseModel):
+    domain_ids: List[int]
+
 @app.post("/api/scan/trigger")
 async def trigger_scan():
-    """Trigger immediate scan by creating a signal file"""
+    """Trigger immediate full scan by creating a signal file"""
     try:
         # Create a trigger file that scanner will check
         trigger_file = "/tmp/ssl_scan_trigger"
         with open(trigger_file, 'w') as f:
             f.write(datetime.now().isoformat())
 
-        logger.info("Scan trigger requested - signal file created")
+        logger.info("Full scan trigger requested - signal file created")
         return {
             "status": "success",
-            "message": "Scan triggered successfully. Scanner will start within 10 seconds.",
+            "message": "Full scan triggered successfully. Scanner will start within 60 seconds.",
             "triggered_at": datetime.now().isoformat()
         }
     except Exception as e:
         logger.error(f"Error triggering scan: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to trigger scan: {str(e)}")
+
+@app.post("/api/scan/domains")
+async def scan_specific_domains(request: ScanDomainsRequest):
+    """Trigger scan for specific domains"""
+    try:
+        if not request.domain_ids:
+            raise HTTPException(status_code=400, detail="No domain IDs provided")
+
+        # Get domain names
+        async with db_pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, domain FROM domains WHERE id = ANY($1::int[]) AND is_active = TRUE",
+                request.domain_ids
+            )
+
+        if not rows:
+            raise HTTPException(status_code=404, detail="No active domains found")
+
+        # Write domain list to a file for scanner to pick up
+        scan_request_file = f"/tmp/ssl_scan_request_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        with open(scan_request_file, 'w') as f:
+            for row in rows:
+                f.write(f"{row['id']}|{row['domain']}\n")
+
+        # Create trigger file with the request file path
+        trigger_file = "/tmp/ssl_scan_trigger"
+        with open(trigger_file, 'w') as f:
+            f.write(scan_request_file)
+
+        domain_names = [r['domain'] for r in rows]
+        logger.info(f"Selective scan triggered for {len(domain_names)} domains")
+
+        return {
+            "status": "success",
+            "message": f"Scan triggered for {len(domain_names)} domains. Scanner will start within 60 seconds.",
+            "triggered_at": datetime.now().isoformat(),
+            "domain_count": len(domain_names),
+            "domains": domain_names
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error triggering selective scan: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to trigger scan: {str(e)}")
 
 @app.get("/health")

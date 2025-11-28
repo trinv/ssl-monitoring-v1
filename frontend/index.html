@@ -317,7 +317,10 @@
                         <!-- Bulk Actions -->
                         <div id="bulkActions" class="bulk-actions">
                             <strong><span id="selectedCount">0</span> domains selected</strong>
-                            <button type="button" class="btn btn-sm btn-danger ml-3" onclick="bulkDelete()">
+                            <button type="button" class="btn btn-sm btn-primary ml-3" onclick="checkSelectedSSL()">
+                                <i class="fas fa-shield-alt"></i> Check SSL
+                            </button>
+                            <button type="button" class="btn btn-sm btn-danger ml-2" onclick="bulkDelete()">
                                 <i class="fas fa-trash"></i> Delete Selected
                             </button>
                             <button type="button" class="btn btn-sm btn-secondary ml-2" onclick="clearSelection()">
@@ -642,6 +645,9 @@ function renderDomainTable(domains) {
             <td>${renderExpiryDate(d.ssl_expiry_date, d.days_until_expiry)}</td>
             <td>${d.scan_time || 'N/A'}</td>
             <td>
+                <button class="btn btn-sm btn-primary mr-1" onclick="checkSingleSSL(${d.id})" title="Check SSL">
+                    <i class="fas fa-shield-alt"></i>
+                </button>
                 <button class="btn btn-sm btn-danger" onclick="deleteDomain(${d.id})" title="Delete">
                     <i class="fas fa-trash"></i>
                 </button>
@@ -1030,6 +1036,81 @@ async function triggerScan() {
         // Restore button state
         button.disabled = false;
         button.innerHTML = originalHtml;
+    }
+}
+
+// Check SSL for selected domains
+async function checkSelectedSSL() {
+    const selectedCheckboxes = document.querySelectorAll('.domain-checkbox:checked');
+    if (selectedCheckboxes.length === 0) {
+        alert('Please select at least one domain');
+        return;
+    }
+
+    const domainIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
+
+    if (!confirm(`Check SSL for ${domainIds.length} selected domain(s)?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/scan/domains`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain_ids: domainIds })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            alert(`SSL scan triggered for ${data.domain_count} domain(s). Scanner will start within 60 seconds.`);
+
+            // Clear selection
+            clearSelection();
+
+            // Reload dashboard and domains after delay
+            setTimeout(() => {
+                loadDashboard();
+                loadDomains();
+            }, 65000); // Wait 65 seconds
+        } else {
+            const error = await response.json();
+            alert(`Error: ${error.detail || 'Failed to trigger scan'}`);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error triggering SSL scan');
+    }
+}
+
+// Check SSL for single domain
+async function checkSingleSSL(domainId) {
+    if (!confirm('Check SSL for this domain?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/scan/domains`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain_ids: [domainId] })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            alert(`SSL scan triggered for: ${data.domains[0]}. Scanner will start within 60 seconds.`);
+
+            // Reload dashboard and domains after delay
+            setTimeout(() => {
+                loadDashboard();
+                loadDomains();
+            }, 65000); // Wait 65 seconds
+        } else {
+            const error = await response.json();
+            alert(`Error: ${error.detail || 'Failed to trigger scan'}`);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error triggering SSL scan');
     }
 }
 

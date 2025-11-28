@@ -109,21 +109,33 @@ wait_for_db() {
 }
 
 #############################################################################
-# Perform scan
+# Perform scan (full or selective)
 #############################################################################
 perform_scan() {
     local SCAN_START=$(date +%s)
-    
+    local SCAN_REQUEST_FILE="$1"
+
     log_info "=========================================="
-    log_info "Starting SSL Certificate Scan"
+    if [[ -n "$SCAN_REQUEST_FILE" ]]; then
+        log_info "Starting Selective SSL Certificate Scan"
+    else
+        log_info "Starting Full SSL Certificate Scan"
+    fi
     log_info "=========================================="
-    
+
     # Refresh materialized view
     psql_query "REFRESH MATERIALIZED VIEW latest_ssl_status;" >/dev/null
-    
-    # Get active domains
-    DOMAIN_LIST=$(psql_query "SELECT id, domain FROM domains WHERE is_active = TRUE ORDER BY domain;")
-    
+
+    # Get domains to scan
+    if [[ -n "$SCAN_REQUEST_FILE" ]] && [[ -f "$SCAN_REQUEST_FILE" ]]; then
+        # Selective scan - read from file
+        DOMAIN_LIST=$(cat "$SCAN_REQUEST_FILE")
+        log_info "Selective scan requested"
+    else
+        # Full scan - get all active domains from database
+        DOMAIN_LIST=$(psql_query "SELECT id, domain FROM domains WHERE is_active = TRUE ORDER BY domain;")
+    fi
+
     if [[ -z "$DOMAIN_LIST" ]]; then
         log_warn "No active domains to scan"
         return
@@ -224,7 +236,22 @@ perform_scan() {
 }
 
 #############################################################################
-# Main loop
+# Calculate seconds until next 00:00 UTC
+#############################################################################
+seconds_until_midnight_utc() {
+    local NOW_UTC=$(date -u +%s)
+    local TODAY_MIDNIGHT=$(date -u -d "today 00:00:00" +%s)
+    local TOMORROW_MIDNIGHT=$(date -u -d "tomorrow 00:00:00" +%s)
+
+    if [ $NOW_UTC -lt $TODAY_MIDNIGHT ]; then
+        echo $((TODAY_MIDNIGHT - NOW_UTC))
+    else
+        echo $((TOMORROW_MIDNIGHT - NOW_UTC))
+    fi
+}
+
+#############################################################################
+# Main loop - Scan once per day at 00:00 UTC
 #############################################################################
 main() {
     log_info "SSL Certificate Scanner starting..."
@@ -232,36 +259,78 @@ main() {
     log_info "  - Database: $DB_HOST:$DB_PORT/$DB_NAME"
     log_info "  - Concurrency: $CONCURRENCY"
     log_info "  - Timeout: ${TIMEOUT}s"
-    log_info "  - Scan interval: ${SCAN_INTERVAL}s ($(($SCAN_INTERVAL / 60)) minutes)"
+    log_info "  - Schedule: Daily at 00:00 UTC"
     log_info ""
-    
+
     # Wait for database
     wait_for_db || exit 1
-    
-    # Main scan loop
-    while true; do
-        perform_scan
 
-        log_info "Sleeping for ${SCAN_INTERVAL}s ($(($SCAN_INTERVAL / 60)) minutes)..."
+    # Check if we should run initial scan
+    LAST_SCAN_FILE="/tmp/last_scan_date"
+    TODAY_UTC=$(date -u +%Y-%m-%d)
+
+    if [ -f "$LAST_SCAN_FILE" ]; then
+        LAST_SCAN_DATE=$(cat "$LAST_SCAN_FILE")
+        if [ "$LAST_SCAN_DATE" != "$TODAY_UTC" ]; then
+            log_info "No scan performed today yet. Running initial scan..."
+            perform_scan
+            echo "$TODAY_UTC" > "$LAST_SCAN_FILE"
+        else
+            log_info "Scan already performed today ($TODAY_UTC). Waiting for next schedule."
+        fi
+    else
+        log_info "First run. Performing initial scan..."
+        perform_scan
+        echo "$TODAY_UTC" > "$LAST_SCAN_FILE"
+    fi
+
+    # Main loop - wait until 00:00 UTC each day
+    TRIGGER_FILE="/tmp/ssl_scan_trigger"
+
+    while true; do
+        SECONDS_TO_WAIT=$(seconds_until_midnight_utc)
+        NEXT_SCAN_TIME=$(date -u -d "tomorrow 00:00:00" '+%Y-%m-%d %H:%M:%S UTC')
+
+        log_info "Next scheduled scan: $NEXT_SCAN_TIME"
+        log_info "Waiting for ${SECONDS_TO_WAIT}s ($(($SECONDS_TO_WAIT / 3600))h $(($SECONDS_TO_WAIT % 3600 / 60))m)"
         log_info "You can trigger immediate scan via API endpoint: POST /api/scan/trigger"
         log_info ""
 
-        # Sleep with periodic checks for trigger file
-        TRIGGER_FILE="/tmp/ssl_scan_trigger"
-        SLEEP_INTERVAL=10
+        # Sleep with periodic checks for trigger file (check every 60 seconds)
+        SLEEP_INTERVAL=60
         ELAPSED=0
 
-        while [ $ELAPSED -lt $SCAN_INTERVAL ]; do
+        while [ $ELAPSED -lt $SECONDS_TO_WAIT ]; do
             # Check if trigger file exists
             if [ -f "$TRIGGER_FILE" ]; then
-                log_info "⚡ Scan trigger detected! Starting immediate scan..."
+                TRIGGER_CONTENT=$(cat "$TRIGGER_FILE")
                 rm -f "$TRIGGER_FILE"
+
+                # Check if it's a selective scan (file path) or full scan (timestamp)
+                if [[ -f "$TRIGGER_CONTENT" ]]; then
+                    log_info "⚡ Selective scan trigger detected! Scanning specific domains..."
+                    perform_scan "$TRIGGER_CONTENT"
+                    rm -f "$TRIGGER_CONTENT"
+                else
+                    log_info "⚡ Full scan trigger detected! Starting immediate full scan..."
+                    perform_scan
+                    TODAY_UTC=$(date -u +%Y-%m-%d)
+                    echo "$TODAY_UTC" > "$LAST_SCAN_FILE"
+                fi
                 break
             fi
 
             sleep $SLEEP_INTERVAL
             ELAPSED=$((ELAPSED + SLEEP_INTERVAL))
         done
+
+        # If we reached midnight (no manual trigger), perform scheduled scan
+        if [ $ELAPSED -ge $SECONDS_TO_WAIT ]; then
+            log_info "⏰ Scheduled scan time reached (00:00 UTC). Starting full scan..."
+            perform_scan
+            TODAY_UTC=$(date -u +%Y-%m-%d)
+            echo "$TODAY_UTC" > "$LAST_SCAN_FILE"
+        fi
     done
 }
 
