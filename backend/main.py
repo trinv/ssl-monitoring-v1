@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 import os
 import logging
 import sys
+from auth import routes as auth_routes
 
 # Configure logging
 logging.basicConfig(
@@ -78,10 +79,14 @@ async def startup_event():
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
+    allow_credentials=True,  # Enable credentials for authentication
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
+
+# Include auth routes
+app.include_router(auth_routes.router, prefix="/api/auth", tags=["Authentication"])
 
 # ==================== Models ====================
 

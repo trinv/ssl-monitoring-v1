@@ -6,7 +6,9 @@
       "Bash(docker rmi:*)",
       "Bash(docker network inspect:*)",
       "Bash(docker exec:*)",
-      "Bash(docker-compose down:*)"
+      "Bash(docker-compose down:*)",
+      "Bash(bash:*)",
+      "Bash(docker-compose ps:*)"
     ],
     "deny": [],
     "ask": []

@@ -559,13 +559,11 @@ function exportCSV() {
 
 // ==================== Initialize ====================
 
-document.addEventListener('DOMContentLoaded', function () {
-    initDashboard();
-    loadDomains(1);
-    updateSortIcons();
-
-    // Enter key triggers search
-    document.getElementById('searchInput').addEventListener('keypress', (e) => {
+// Initialization moved to index.html to integrate with auth
+// Enter key triggers search - setup on document ready
+$(document).ready(function() {
+    $('#searchInput').on('keypress', function(e) {
         if (e.key === 'Enter') applyFilters();
     });
+    updateSortIcons();
 });

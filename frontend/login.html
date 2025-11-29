@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SSL Monitor | Login</title>
+
+    <!-- Google Font: Source Sans Pro -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <!-- AdminLTE -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
+
+    <style>
+        .login-page {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .login-box {
+            width: 400px;
+        }
+        .login-logo a {
+            color: #fff;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .login-card-body {
+            padding: 30px;
+        }
+        .login-box-msg {
+            margin: 0;
+            padding: 0 20px 20px;
+            text-align: center;
+            color: #666;
+            font-size: 16px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 5px;
+            padding: 10px;
+            font-weight: 600;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #653a8a 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .input-group-text {
+            border-radius: 5px 0 0 5px;
+        }
+        .form-control {
+            border-radius: 0 5px 5px 0;
+            border-left: none;
+        }
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: none;
+        }
+        .alert {
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .spinner-border-sm {
+            display: none;
+        }
+        .loading .spinner-border-sm {
+            display: inline-block;
+        }
+        .loading .btn-text {
+            display: none;
+        }
+    </style>
+</head>
+<body class="hold-transition login-page">
+<div class="login-box">
+    <!-- Logo -->
+    <div class="login-logo">
+        <a href="#"><i class="fas fa-shield-alt"></i> <b>SSL</b> Monitor</a>
+    </div>
+    <!-- /.login-logo -->
+
+    <!-- Login Card -->
+    <div class="card">
+        <div class="card-body login-card-body">
+            <p class="login-box-msg">Sign in to start your session</p>
+
+            <!-- Error Alert -->
+            <div id="errorAlert" class="alert alert-danger alert-dismissible" style="display: none;">
+                <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+                <i class="icon fas fa-ban"></i> <span id="errorMessage"></span>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm">
+                <div class="input-group mb-3">
+                    <input type="text"
+                           id="username"
+                           class="form-control"
+                           placeholder="Username"
+                           required
+                           autofocus>
+                    <div class="input-group-append">
+                        <div class="input-group-text">
+                            <span class="fas fa-user"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group mb-3">
+                    <input type="password"
+                           id="password"
+                           class="form-control"
+                           placeholder="Password"
+                           required>
+                    <div class="input-group-append">
+                        <div class="input-group-text">
+                            <span class="fas fa-lock"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-8">
+                        <div class="icheck-primary">
+                            <input type="checkbox" id="remember">
+                            <label for="remember">
+                                Remember Me
+                            </label>
+                        </div>
+                    </div>
+                    <!-- /.col -->
+                    <div class="col-4">
+                        <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
+                            <span class="btn-text">Sign In</span>
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                    <!-- /.col -->
+                </div>
+            </form>
+
+            <!-- /.social-auth-links -->
+            <p class="mb-0 mt-3 text-center">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle"></i> Default credentials: admin / Admin@123
+                </small>
+            </p>
+        </div>
+        <!-- /.login-card-body -->
+    </div>
+</div>
+<!-- /.login-box -->
+
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- Bootstrap 4 -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+<!-- AdminLTE App -->
+<script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+
+<!-- Login Logic -->
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+    // Initialize login page
+    $(document).ready(function() {
+        // Check if already logged in
+        if (isAuthenticated()) {
+            window.location.href = 'index.html';
+        }
+
+        // Handle login form submission
+        $('#loginForm').on('submit', function(e) {
+            e.preventDefault();
+            handleLogin();
+        });
+
+        // Clear error on input
+        $('#username, #password').on('input', function() {
+            hideError();
+        });
+    });
+
+    async function handleLogin() {
+        const username = $('#username').val().trim();
+        const password = $('#password').val();
+        const remember = $('#remember').is(':checked');
+
+        if (!username || !password) {
+            showError('Please enter both username and password');
+            return;
+        }
+
+        // Show loading state
+        $('#loginBtn').addClass('loading').prop('disabled', true);
+        hideError();
+
+        try {
+            const result = await login(username, password, remember);
+
+            if (result.success) {
+                // Show success briefly then redirect
+                showSuccess('Login successful! Redirecting...');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 500);
+            } else {
+                showError(result.message || 'Login failed');
+                $('#loginBtn').removeClass('loading').prop('disabled', false);
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            showError(error.message || 'An error occurred during login');
+            $('#loginBtn').removeClass('loading').prop('disabled', false);
+        }
+    }
+
+    function showError(message) {
+        $('#errorMessage').text(message);
+        $('#errorAlert').removeClass('alert-success').addClass('alert-danger').fadeIn();
+    }
+
+    function showSuccess(message) {
+        $('#errorMessage').text(message);
+        $('#errorAlert').removeClass('alert-danger').addClass('alert-success').fadeIn();
+    }
+
+    function hideError() {
+        $('#errorAlert').fadeOut();
+    }
+</script>
+</body>
+</html>

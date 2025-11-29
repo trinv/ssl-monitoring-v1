@@ -24,6 +24,19 @@
             </li>
         </ul>
         <ul class="navbar-nav ml-auto">
+            <!-- User Dropdown -->
+            <li class="nav-item dropdown">
+                <a class="nav-link" data-toggle="dropdown" href="#" role="button">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="navUsername" class="d-none d-sm-inline-block ml-1">User</span>
+                    <span id="navUserRole" class="badge badge-sm badge-secondary ml-1">user</span>
+                </a>
+                <div class="dropdown-menu dropdown-menu-right">
+                    <a href="#" class="dropdown-item" onclick="logout(); return false;">
+                        <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                    </a>
+                </div>
+            </li>
             <li class="nav-item">
                 <a class="nav-link" data-widget="fullscreen" href="#" role="button">
                     <i class="fas fa-expand-arrows-alt"></i>
@@ -409,8 +422,23 @@ example3.com"></textarea>
 
 <!-- Application Scripts -->
 <script src="js/config.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/api.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/domains.js"></script>
+
+<script>
+// Initialize authentication and application
+$(document).ready(function() {
+    // Check authentication
+    if (!initAuth()) {
+        return; // Will redirect to login
+    }
+
+    // Initialize dashboard and domains
+    initDashboard();
+    loadDomains(currentPage);
+});
+</script>
 </body>
 </html>
