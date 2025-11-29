@@ -4,6 +4,27 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SSL Certificate Monitor</title>
+
+    <!-- Immediate Auth Check - Before Loading Any Resources -->
+    <script>
+        // Check authentication immediately before page loads
+        (function() {
+            const STORAGE_KEY_TOKEN = 'ssl_monitor_token';
+            const STORAGE_KEY_REMEMBER = 'ssl_monitor_remember';
+
+            function getAuthToken() {
+                const remember = localStorage.getItem(STORAGE_KEY_REMEMBER) === 'true';
+                const storage = remember ? localStorage : sessionStorage;
+                return storage.getItem(STORAGE_KEY_TOKEN);
+            }
+
+            // If not authenticated, redirect immediately
+            if (!getAuthToken()) {
+                window.location.replace('login.html');
+            }
+        })();
+    </script>
+
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
@@ -11,7 +32,7 @@
     <!-- Custom Styles -->
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body class="hold-transition sidebar-mini">
+<body class="hold-transition sidebar-mini" style="visibility: hidden;">
 <div class="wrapper">
     <!-- Navbar -->
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
@@ -434,6 +455,9 @@ $(document).ready(function() {
     if (!initAuth()) {
         return; // Will redirect to login
     }
+
+    // Show page after authentication is confirmed
+    document.body.style.visibility = 'visible';
 
     // Initialize dashboard and domains
     initDashboard();

@@ -30,19 +30,52 @@ This guide explains how to set up the authentication system for SSL Certificate 
 
 ## Installation Steps
 
-### Step 1: Run Database Migration
+### Quick Install (Recommended)
 
-**Option A: Using Docker (Recommended)**
+Run the automated deployment script:
 
 ```bash
 # Navigate to project directory
 cd "d:\VNNIC\4. CA NHAN\Freelancer\Namestar\Monitoring\ssl-monitoring-v1"
 
+# Run deployment script
+bash rebuild_with_auth.sh
+```
+
+This script will:
+1. Stop all services
+2. Rebuild backend with auth module
+3. Start all services
+4. Run database migration automatically
+
+### Manual Installation
+
+**Step 1: Rebuild Backend Docker Image**
+
+```bash
+cd "d:\VNNIC\4. CA NHAN\Freelancer\Namestar\Monitoring\ssl-monitoring-v1"
+
+# Stop services
+docker compose down
+
+# Rebuild backend
+docker compose build backend
+
+# Start services
+docker compose up -d
+```
+
+**Step 2: Run Database Migration**
+
+```bash
+# Wait for services to start (about 10 seconds)
+sleep 10
+
 # Run migration through Docker
 docker exec -i ssl-monitoring-postgres psql -U ssluser -d ssl_monitor < database/auth_migration.sql
 ```
 
-**Option B: Using psql directly**
+**Alternative: Using psql directly**
 
 ```bash
 # Navigate to database directory
@@ -50,28 +83,6 @@ cd database
 
 # Run migration script
 bash run_auth_migration.sh
-```
-
-**Option C: Manual execution**
-
-```bash
-# Connect to PostgreSQL
-psql -h localhost -p 5432 -U ssluser -d ssl_monitor
-
-# Copy and paste the contents of database/auth_migration.sql
-```
-
-### Step 2: Restart Backend
-
-After running the migration, restart the FastAPI backend to load the auth routes:
-
-```bash
-# If using Docker
-docker compose restart backend
-
-# If running locally
-# Stop the backend (Ctrl+C) and restart it
-python backend/main.py
 ```
 
 ### Step 3: Verify Installation
