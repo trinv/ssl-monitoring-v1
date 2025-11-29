@@ -6,7 +6,6 @@ from typing import List
 import asyncpg
 from datetime import datetime
 
-from database import get_db_pool
 from auth.models import (
     LoginRequest, LoginResponse, User, UserCreate,
     UserUpdate, UserChangePassword
@@ -15,10 +14,10 @@ from auth.utils import (
     hash_password, verify_password, generate_session_token,
     generate_token_expiry, validate_password_strength
 )
-from auth.dependencies import get_current_user, require_permission, require_role
+from auth.dependencies import get_current_user, require_permission, require_role, get_db_pool
 
 
-router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+router = APIRouter()
 
 
 @router.post("/login", response_model=LoginResponse)
