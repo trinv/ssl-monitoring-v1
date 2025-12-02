@@ -12,7 +12,8 @@
       "Bash(python -m py_compile:*)",
       "Bash(tree:*)",
       "Bash(docker-compose build:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(docker-compose up:*)"
     ],
     "deny": [],
     "ask": []
