@@ -1,70 +1,53 @@
 /**
- * SSL Certificate Monitoring - Authentication Functions
+ * Simple Authentication
+ * - Store token in localStorage
+ * - Check token on page load
+ * - Login/Logout
  */
 
-// Storage keys
-const STORAGE_KEY_TOKEN = 'ssl_monitor_token';
-const STORAGE_KEY_USER = 'ssl_monitor_user';
-const STORAGE_KEY_REMEMBER = 'ssl_monitor_remember';
+const STORAGE_KEY_TOKEN = 'ssl_token';
+const STORAGE_KEY_USER = 'ssl_user';
 
-// Get authentication token from storage
+// Get token
 function getAuthToken() {
-    const remember = localStorage.getItem(STORAGE_KEY_REMEMBER) === 'true';
-    const storage = remember ? localStorage : sessionStorage;
-    return storage.getItem(STORAGE_KEY_TOKEN);
+    return localStorage.getItem(STORAGE_KEY_TOKEN);
 }
 
-// Set authentication token in storage
-function setAuthToken(token, remember = false) {
-    const storage = remember ? localStorage : sessionStorage;
-    storage.setItem(STORAGE_KEY_TOKEN, token);
-    localStorage.setItem(STORAGE_KEY_REMEMBER, remember.toString());
+// Set token
+function setAuthToken(token) {
+    localStorage.setItem(STORAGE_KEY_TOKEN, token);
 }
 
-// Get user info from storage
+// Get user info
 function getCurrentUser() {
-    const remember = localStorage.getItem(STORAGE_KEY_REMEMBER) === 'true';
-    const storage = remember ? localStorage : sessionStorage;
-    const userJson = storage.getItem(STORAGE_KEY_USER);
+    const userJson = localStorage.getItem(STORAGE_KEY_USER);
     return userJson ? JSON.parse(userJson) : null;
 }
 
-// Set user info in storage
-function setCurrentUser(user, remember = false) {
-    const storage = remember ? localStorage : sessionStorage;
-    storage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+// Set user info
+function setCurrentUser(user) {
+    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
 }
 
-// Clear authentication data
+// Clear auth
 function clearAuth() {
     localStorage.removeItem(STORAGE_KEY_TOKEN);
     localStorage.removeItem(STORAGE_KEY_USER);
-    localStorage.removeItem(STORAGE_KEY_REMEMBER);
-    sessionStorage.removeItem(STORAGE_KEY_TOKEN);
-    sessionStorage.removeItem(STORAGE_KEY_USER);
 }
 
-// Check if user is authenticated
+// Check if authenticated
 function isAuthenticated() {
     return !!getAuthToken();
 }
 
-// Check if user has a specific permission
-function hasPermission(permission) {
+// Check if admin
+function isAdmin() {
     const user = getCurrentUser();
-    if (!user || !user.permissions) return false;
-    return user.permissions.includes(permission);
+    return user && user.role_name === 'admin';
 }
 
-// Check if user has a specific role
-function hasRole(roleName) {
-    const user = getCurrentUser();
-    if (!user) return false;
-    return user.role_name === roleName;
-}
-
-// Login function
-async function login(username, password, remember = false) {
+// Login
+async function login(username, password) {
     try {
         const response = await fetch(`${API_BASE_URL}/auth/login`, {
             method: 'POST',
@@ -86,9 +69,9 @@ async function login(username, password, remember = false) {
             };
         }
 
-        // Store token and user info
-        setAuthToken(data.token, remember);
-        setCurrentUser(data.user, remember);
+        // Save token and user
+        setAuthToken(data.token);
+        setCurrentUser(data.user);
 
         return {
             success: true,
@@ -104,13 +87,12 @@ async function login(username, password, remember = false) {
     }
 }
 
-// Logout function
+// Logout
 async function logout() {
     const token = getAuthToken();
 
     if (token) {
         try {
-            // Call logout endpoint
             await fetch(`${API_BASE_URL}/auth/logout`, {
                 method: 'POST',
                 headers: {
@@ -122,14 +104,11 @@ async function logout() {
         }
     }
 
-    // Clear local storage
     clearAuth();
-
-    // Redirect to login page
     window.location.href = 'login.html';
 }
 
-// Get current user info from server
+// Get current user from server
 async function fetchCurrentUser() {
     const token = getAuthToken();
 
@@ -147,7 +126,6 @@ async function fetchCurrentUser() {
 
         if (!response.ok) {
             if (response.status === 401) {
-                // Token expired or invalid
                 clearAuth();
                 return null;
             }
@@ -155,11 +133,7 @@ async function fetchCurrentUser() {
         }
 
         const user = await response.json();
-
-        // Update stored user info
-        const remember = localStorage.getItem(STORAGE_KEY_REMEMBER) === 'true';
-        setCurrentUser(user, remember);
-
+        setCurrentUser(user);
         return user;
     } catch (error) {
         console.error('Error fetching user info:', error);
@@ -167,8 +141,8 @@ async function fetchCurrentUser() {
     }
 }
 
-// Change password function
-async function changePassword(currentPassword, newPassword) {
+// Change password
+async function changePassword(oldPassword, newPassword) {
     const token = getAuthToken();
 
     if (!token) {
@@ -186,7 +160,7 @@ async function changePassword(currentPassword, newPassword) {
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-                current_password: currentPassword,
+                old_password: oldPassword,
                 new_password: newPassword
             })
         });
@@ -199,6 +173,9 @@ async function changePassword(currentPassword, newPassword) {
                 message: data.detail || 'Password change failed'
             };
         }
+
+        // Clear auth (user needs to login again)
+        clearAuth();
 
         return {
             success: true,
@@ -213,24 +190,21 @@ async function changePassword(currentPassword, newPassword) {
     }
 }
 
-// Add authorization header to fetch requests
+// Fetch with auth
 function authFetch(url, options = {}) {
     const token = getAuthToken();
 
     if (!token) {
-        // Redirect to login if no token
         window.location.href = 'login.html';
         return Promise.reject(new Error('Not authenticated'));
     }
 
-    // Add authorization header
     options.headers = {
         ...options.headers,
         'Authorization': `Bearer ${token}`
     };
 
     return fetch(url, options).then(response => {
-        // If unauthorized, redirect to login
         if (response.status === 401) {
             clearAuth();
             window.location.href = 'login.html';
@@ -240,7 +214,7 @@ function authFetch(url, options = {}) {
     });
 }
 
-// Check authentication on page load (for protected pages)
+// Require auth
 function requireAuth() {
     if (!isAuthenticated()) {
         window.location.href = 'login.html';
@@ -249,12 +223,12 @@ function requireAuth() {
     return true;
 }
 
-// Display user info in navbar
+// Display user info
 function displayUserInfo() {
     const user = getCurrentUser();
     if (!user) return;
 
-    // Update username display
+    // Update username
     const usernameElement = document.getElementById('navUsername');
     if (usernameElement) {
         usernameElement.textContent = user.full_name || user.username;
@@ -264,30 +238,35 @@ function displayUserInfo() {
     const roleElement = document.getElementById('navUserRole');
     if (roleElement) {
         roleElement.textContent = user.role_name;
-
-        // Apply role-specific badge color
         roleElement.className = 'badge badge-sm';
+
         if (user.role_name === 'admin') {
             roleElement.classList.add('badge-danger');
-        } else if (user.role_name === 'user') {
-            roleElement.classList.add('badge-primary');
         } else {
-            roleElement.classList.add('badge-secondary');
+            roleElement.classList.add('badge-primary');
         }
     }
+
+    // Show/hide admin features
+    const adminElements = document.querySelectorAll('.admin-only');
+    adminElements.forEach(el => {
+        if (isAdmin()) {
+            el.style.display = '';
+        } else {
+            el.style.display = 'none';
+        }
+    });
 }
 
-// Initialize authentication for protected pages
+// Init auth
 function initAuth() {
-    // Check if authenticated
     if (!requireAuth()) {
         return false;
     }
 
-    // Display user info
     displayUserInfo();
 
-    // Refresh user info from server
+    // Refresh user info
     fetchCurrentUser().catch(err => {
         console.error('Failed to refresh user info:', err);
     });
