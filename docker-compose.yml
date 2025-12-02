@@ -5,16 +5,16 @@ services:
     image: postgres:15-alpine
     container_name: ssl-monitor-postgres
     environment:
-      POSTGRES_DB: ssl_monitor
-      POSTGRES_USER: ssluser
-      POSTGRES_PASSWORD: SSL@Pass123
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - ssl-monitor
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ssluser -d ssl_monitor"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -25,16 +25,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: ssl-monitor-backend
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ssl_monitor
-      DB_USER: ssluser
-      DB_PASSWORD: SSL@Pass123
+    env_file:
+      - .env
     ports:
       - "8080:8080"
-    volumes:
-      - scanner_triggers:/tmp
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,17 +41,8 @@ services:
       context: ./scanner
       dockerfile: Dockerfile
     container_name: ssl-monitor-scanner
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ssl_monitor
-      DB_USER: ssluser
-      DB_PASSWORD: SSL@Pass123
-      CONCURRENCY: 20
-      TIMEOUT: 5
-      TZ: UTC
-    volumes:
-      - scanner_triggers:/tmp
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,6 +70,4 @@ networks:
 
 volumes:
   postgres_data:
-    driver: local
-  scanner_triggers:
     driver: local

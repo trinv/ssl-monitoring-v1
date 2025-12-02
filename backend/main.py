@@ -1,519 +1,259 @@
 """
-SSL Certificate Monitoring API
-PostgreSQL Backend - Bash Scanner
+SSL Monitor Backend API
+FastAPI application with authentication, rate limiting, and monitoring
 """
-
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from typing import List, Optional
-from datetime import datetime
-import asyncpg
-import csv
-import io
-from pydantic import BaseModel
-from contextlib import asynccontextmanager
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import os
+from datetime import datetime, timezone
 import logging
-import sys
-from auth import routes as auth_routes
+import uuid
 
-# Configure logging
+from backend.database import init_db, close_db
+from backend.routes import auth, domains, scan
+
+# ============================================
+# Logging Configuration
+# ============================================
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
+    level=os.getenv("LOG_LEVEL", "info").upper(),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# Configuration
-DB_HOST = os.getenv("DB_HOST", "postgres")
-DB_PORT = int(os.getenv("DB_PORT", "5432"))
-DB_NAME = os.getenv("DB_NAME", "ssl_monitor")
-DB_USER = os.getenv("DB_USER", "ssluser")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "SSL@Pass123")
+# ============================================
+# Security Configuration
+# ============================================
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "https://mona.namestar.com").split(",")
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS]
+ALLOW_CREDENTIALS = os.getenv("ALLOW_CREDENTIALS", "true").lower() == "true"
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
 
-# Database pool
-db_pool = None
+logger.info(f"🚀 Starting in {ENVIRONMENT} environment")
+logger.info(f"✅ CORS Origins allowed: {CORS_ORIGINS}")
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global db_pool
-    logger.info(f"Starting application...")
-    logger.info(f"Connecting to PostgreSQL at {DB_HOST}:{DB_PORT}/{DB_NAME}")
-    
-    try:
-        db_pool = await asyncpg.create_pool(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME,
-            min_size=5,
-            max_size=20
-        )
-        logger.info(f"✅ Successfully connected to PostgreSQL")
-    except Exception as e:
-        logger.error(f"❌ Failed to connect to PostgreSQL: {e}")
-        raise
-    
-    yield
-    
-    logger.info("Shutting down...")
-    await db_pool.close()
-    logger.info("👋 Database connections closed")
+# ============================================
+# Rate Limiting
+# ============================================
+limiter = Limiter(key_func=get_remote_address)
 
+# ============================================
+# FastAPI Application
+# ============================================
 app = FastAPI(
-    title="SSL Certificate Monitoring API",
-    description="PostgreSQL + Bash Scanner",
-    version="2.2.0",
-    lifespan=lifespan
+    title="SSL Certificate Monitor API",
+    description="Real-time SSL certificate monitoring system with automated scanning",
+    version="3.0.0",
+    docs_url="/docs" if ENVIRONMENT != "production" else None,
+    redoc_url="/redoc" if ENVIRONMENT != "production" else None,
 )
 
-# Add startup event
-@app.on_event("startup")
-async def startup_event():
-    logger.info("FastAPI application started")
-    logger.info(f"API documentation available at: /docs")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# ============================================
+# CORS Middleware
+# ============================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,  # Enable credentials for authentication
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"]
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=ALLOW_CREDENTIALS,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+    expose_headers=["X-Total-Count", "X-Page-Number", "X-Request-ID"],
+    max_age=3600
 )
 
-# Include auth routes
-app.include_router(auth_routes.router, prefix="/api/auth", tags=["Authentication"])
+# ============================================
+# Security Headers Middleware
+# ============================================
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add security headers to all responses"""
+    response = await call_next(request)
 
-# ==================== Models ====================
+    # Security headers
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=(), payment=()"
 
-class DomainCreate(BaseModel):
-    domain: str
-    notes: Optional[str] = None
+    # CSP
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "upgrade-insecure-requests;"
+    )
 
-class DomainBulkCreate(BaseModel):
-    domains: List[str]
+    # HSTS in production
+    if ENVIRONMENT == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
 
-class DomainBulkDelete(BaseModel):
-    domain_ids: List[int]
+    return response
 
-class SSLStatusHistory(BaseModel):
-    ssl_status: str
-    scan_time: str  # Format: HH:MM dd/mm/yyyy
-    days_until_expiry: Optional[int]
+# ============================================
+# Request ID Middleware
+# ============================================
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    """Add unique request ID for tracking"""
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
 
-class SSLStatus(BaseModel):
-    id: int
-    domain: str
-    ssl_status: Optional[str]
-    ssl_expiry_date: Optional[str]  # Format: dd/mm/yyyy
-    days_until_expiry: Optional[int]
-    scan_time: Optional[str]  # Format: HH:MM dd/mm/yyyy
-    status_history: Optional[List[SSLStatusHistory]] = None
+# ============================================
+# Logging Middleware
+# ============================================
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all HTTP requests"""
+    start_time = datetime.now(timezone.utc)
 
-class DashboardSummary(BaseModel):
-    total_domains: int
-    ssl_valid_count: int
-    expired_soon_count: int
-    failed_count: int
-    last_scan_time: Optional[datetime]
+    response = await call_next(request)
 
-# ==================== API Endpoints ====================
+    process_time = (datetime.now(timezone.utc) - start_time).total_seconds()
 
+    logger.info(
+        f"{request.method} {request.url.path} - "
+        f"Status: {response.status_code} - "
+        f"Time: {process_time:.3f}s - "
+        f"Client: {request.client.host if request.client else 'unknown'}"
+    )
+
+    return response
+
+# ============================================
+# Exception Handlers
+# ============================================
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, _exc: RateLimitExceeded):
+    """Handle rate limit exceeded errors"""
+    logger.warning(f"⚠️ Rate limit exceeded for {request.client.host} on {request.url.path}")
+
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "Too many requests",
+            "detail": "Rate limit exceeded. Please try again later.",
+            "retry_after": 60
+        },
+        headers={"Retry-After": "60"}
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle general exceptions"""
+    logger.error(f"❌ Unhandled exception on {request.url.path}: {str(exc)}", exc_info=True)
+
+    # Don't expose internal errors in production
+    error_detail = "Internal server error"
+    if ENVIRONMENT != "production":
+        error_detail = str(exc)
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal Server Error",
+            "detail": error_detail
+        }
+    )
+
+# ============================================
+# Lifecycle Events
+# ============================================
+@app.on_event("startup")
+async def startup():
+    """Initialize services on startup"""
+    try:
+        logger.info("🚀 Starting SSL Monitor Backend...")
+        await init_db()
+        logger.info("✅ Backend started successfully")
+    except Exception as e:
+        logger.error(f"❌ Startup failed: {str(e)}")
+        raise
+
+@app.on_event("shutdown")
+async def shutdown():
+    """Cleanup on shutdown"""
+    try:
+        logger.info("🔄 Shutting down SSL Monitor Backend...")
+        await close_db()
+        logger.info("✅ Backend shutdown complete")
+    except Exception as e:
+        logger.error(f"❌ Shutdown error: {str(e)}")
+
+# ============================================
+# Health Check Endpoints
+# ============================================
+@app.get("/health")
+@limiter.limit("1000/minute")
+async def health_check(request: Request):
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": "3.0.0",
+        "environment": ENVIRONMENT
+    }
+
+@app.get("/live")
+async def liveness_probe():
+    """Kubernetes liveness probe"""
+    return {"status": "alive"}
+
+@app.get("/ready")
+async def readiness_probe():
+    """Kubernetes readiness probe"""
+    try:
+        # Could add database connectivity check here
+        return {"status": "ready"}
+    except Exception as e:
+        logger.error(f"❌ Readiness check failed: {str(e)}")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not ready", "reason": str(e)}
+        )
+
+# ============================================
+# Include Routers
+# ============================================
+app.include_router(auth.router)
+app.include_router(domains.router)
+app.include_router(scan.router)
+
+# ============================================
+# Root Endpoint
+# ============================================
 @app.get("/")
 async def root():
-    logger.info("Root endpoint accessed")
+    """API root endpoint"""
     return {
-        "status": "ok",
-        "message": "SSL Certificate Monitoring API - PostgreSQL + Bash Scanner",
-        "version": "2.2.0",
-        "port": 8080,
-        "database": f"{DB_HOST}:{DB_PORT}/{DB_NAME}"
+        "name": "SSL Monitor API",
+        "version": "3.0.0",
+        "status": "running",
+        "docs": "/docs" if ENVIRONMENT != "production" else "disabled",
+        "health": "/health"
     }
-
-@app.get("/api/dashboard/summary", response_model=DashboardSummary)
-async def get_dashboard_summary():
-    # Refresh materialized view
-    await db_pool.execute("REFRESH MATERIALIZED VIEW latest_ssl_status")
-    
-    async with db_pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT * FROM dashboard_summary")
-        
-        if not row:
-            return {
-                "total_domains": 0,
-                "ssl_valid_count": 0,
-                "expired_soon_count": 0,
-                "failed_count": 0,
-                "last_scan_time": None
-            }
-        
-        return {
-            "total_domains": row['total_domains'] or 0,
-            "ssl_valid_count": row['ssl_valid_count'] or 0,
-            "expired_soon_count": row['expired_soon_count'] or 0,
-            "failed_count": row['failed_count'] or 0,
-            "last_scan_time": row['last_scan_time']
-        }
-
-class DomainListResponse(BaseModel):
-    total: int
-    page: int
-    per_page: int
-    total_pages: int
-    domains: List[SSLStatus]
-
-@app.get("/api/domains", response_model=DomainListResponse)
-async def get_domains(
-    ssl_status: Optional[str] = Query(None),
-    expired_soon: Optional[bool] = Query(None),
-    search: Optional[str] = Query(None),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(100, ge=1, le=1000),
-    sort_by: Optional[str] = Query("domain"),
-    sort_order: Optional[str] = Query("asc")
-):
-    # Refresh materialized view
-    await db_pool.execute("REFRESH MATERIALIZED VIEW latest_ssl_status")
-
-    # Build query
-    where_conditions = ["1=1"]
-    params = []
-    param_count = 1
-
-    if ssl_status:
-        where_conditions.append(f"ssl_status = ${param_count}")
-        params.append(ssl_status)
-        param_count += 1
-
-    if expired_soon:
-        where_conditions.append("days_until_expiry IS NOT NULL AND days_until_expiry < 7")
-
-    if search:
-        where_conditions.append(f"domain ILIKE ${param_count}")
-        params.append(f"%{search}%")
-        param_count += 1
-
-    where_clause = " AND ".join(where_conditions)
-
-    # Build ORDER BY clause
-    allowed_sort_columns = {
-        "domain": "domain",
-        "ssl_status": "ssl_status",
-        "days_until_expiry": "days_until_expiry",
-        "scan_time": "scan_time"
-    }
-
-    sort_column = allowed_sort_columns.get(sort_by, "domain")
-    order_direction = "DESC" if sort_order.lower() == "desc" else "ASC"
-
-    # Special handling for NULL values in days_until_expiry
-    if sort_column == "days_until_expiry":
-        order_clause = f"{sort_column} {order_direction} NULLS LAST"
-    else:
-        order_clause = f"{sort_column} {order_direction}"
-
-    async with db_pool.acquire() as conn:
-        # Get total count
-        total = await conn.fetchval(f"""
-            SELECT COUNT(*) FROM latest_ssl_status WHERE {where_clause}
-        """, *params)
-
-        total_pages = (total + per_page - 1) // per_page
-        offset = (page - 1) * per_page
-
-        # Get paginated data
-        query = f"""
-            SELECT
-                id, domain, ssl_status, ssl_expiry_timestamp, days_until_expiry, scan_time
-            FROM latest_ssl_status
-            WHERE {where_clause}
-            ORDER BY {order_clause}
-            LIMIT ${param_count} OFFSET ${param_count + 1}
-        """
-        params.extend([per_page, offset])
-
-        rows = await conn.fetch(query, *params)
-
-        results = []
-        for row in rows:
-            # Format dates
-            expiry_date_str = None
-            if row['ssl_expiry_timestamp']:
-                expiry_date_str = row['ssl_expiry_timestamp'].strftime('%d/%m/%Y')
-
-            scan_time_str = None
-            if row['scan_time']:
-                scan_time_str = row['scan_time'].strftime('%H:%M %d/%m/%Y')
-
-            # Get status history (last 5 scans)
-            history = await conn.fetch("""
-                SELECT scan_time, ssl_status, days_until_expiry
-                FROM ssl_scan_results
-                WHERE domain_id = $1
-                ORDER BY scan_time DESC
-                LIMIT 5
-            """, row['id'])
-
-            history_list = []
-            for h in history:
-                history_list.append({
-                    'ssl_status': h['ssl_status'],
-                    'scan_time': h['scan_time'].strftime('%H:%M %d/%m/%Y') if h['scan_time'] else None,
-                    'days_until_expiry': h['days_until_expiry']
-                })
-
-            results.append({
-                'id': row['id'],
-                'domain': row['domain'],
-                'ssl_status': row['ssl_status'],
-                'ssl_expiry_date': expiry_date_str,
-                'days_until_expiry': row['days_until_expiry'],
-                'scan_time': scan_time_str,
-                'status_history': history_list
-            })
-
-        return {
-            'total': total,
-            'page': page,
-            'per_page': per_page,
-            'total_pages': total_pages,
-            'domains': results
-        }
-
-@app.post("/api/domains")
-async def create_domain(domain: DomainCreate):
-    async with db_pool.acquire() as conn:
-        try:
-            row = await conn.fetchrow("""
-                INSERT INTO domains (domain, notes)
-                VALUES ($1, $2)
-                RETURNING id, domain, created_at
-            """, domain.domain.lower().strip(), domain.notes)
-            
-            return dict(row)
-            
-        except asyncpg.UniqueViolationError:
-            raise HTTPException(status_code=400, detail="Domain already exists")
-
-@app.post("/api/domains/bulk")
-async def create_domains_bulk(bulk: DomainBulkCreate):
-    added = []
-    failed = []
-    
-    async with db_pool.acquire() as conn:
-        for domain in bulk.domains:
-            try:
-                domain_clean = domain.lower().strip()
-                if not domain_clean:
-                    continue
-                
-                row = await conn.fetchrow("""
-                    INSERT INTO domains (domain) VALUES ($1)
-                    RETURNING id, domain
-                """, domain_clean)
-                
-                added.append(dict(row))
-                
-            except asyncpg.UniqueViolationError:
-                failed.append({"domain": domain, "reason": "Already exists"})
-            except Exception as e:
-                failed.append({"domain": domain, "reason": str(e)})
-        
-        return {
-            "total_added": len(added),
-            "total_failed": len(failed),
-            "added": added,
-            "failed": failed
-        }
-
-@app.delete("/api/domains/{domain_id}")
-async def delete_domain(domain_id: int):
-    async with db_pool.acquire() as conn:
-        result = await conn.execute("DELETE FROM domains WHERE id = $1", domain_id)
-        
-        if result == "DELETE 0":
-            raise HTTPException(status_code=404, detail="Domain not found")
-        
-        return {"message": "Domain deleted successfully"}
-
-@app.post("/api/domains/bulk-delete")
-async def bulk_delete_domains(bulk: DomainBulkDelete):
-    if not bulk.domain_ids:
-        raise HTTPException(status_code=400, detail="No domain IDs provided")
-
-    async with db_pool.acquire() as conn:
-        result = await conn.execute(
-            "DELETE FROM domains WHERE id = ANY($1::int[])",
-            bulk.domain_ids
-        )
-
-        count = int(result.split()[-1])
-
-        return {"message": f"Deleted {count} domains", "deleted_count": count}
-
-class DomainBulkDeleteByName(BaseModel):
-    domains: List[str]
-
-@app.post("/api/domains/bulk-delete-by-name")
-async def bulk_delete_domains_by_name(bulk: DomainBulkDeleteByName):
-    if not bulk.domains:
-        raise HTTPException(status_code=400, detail="No domains provided")
-
-    # Normalize domain names (lowercase, trim)
-    domain_names = [d.lower().strip() for d in bulk.domains if d.strip()]
-
-    if not domain_names:
-        raise HTTPException(status_code=400, detail="No valid domains provided")
-
-    async with db_pool.acquire() as conn:
-        # Find matching domains
-        rows = await conn.fetch(
-            "SELECT id, domain FROM domains WHERE LOWER(domain) = ANY($1::text[])",
-            domain_names
-        )
-
-        found_domains = [r['domain'] for r in rows]
-        domain_ids = [r['id'] for r in rows]
-        not_found = [d for d in domain_names if d not in [fd.lower() for fd in found_domains]]
-
-        deleted_count = 0
-        if domain_ids:
-            result = await conn.execute(
-                "DELETE FROM domains WHERE id = ANY($1::int[])",
-                domain_ids
-            )
-            deleted_count = int(result.split()[-1])
-
-        return {
-            "deleted_count": deleted_count,
-            "found_domains": found_domains,
-            "not_found_domains": not_found,
-            "message": f"Deleted {deleted_count} domains"
-        }
-
-@app.get("/api/export/csv")
-async def export_csv(ssl_status: Optional[str] = Query(None)):
-    # Refresh materialized view
-    await db_pool.execute("REFRESH MATERIALIZED VIEW latest_ssl_status")
-
-    query = """
-        SELECT domain, ssl_status, ssl_expiry_timestamp, days_until_expiry, scan_time
-        FROM latest_ssl_status
-        WHERE 1=1
-    """
-
-    async with db_pool.acquire() as conn:
-        if ssl_status:
-            rows = await conn.fetch(query + " AND ssl_status = $1", ssl_status)
-        else:
-            rows = await conn.fetch(query)
-
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow([
-            'Domain', 'SSL Status', 'Expiry Date', 'Days Until Expiry', 'Last Scan'
-        ])
-
-        for row in rows:
-            expiry_date = row['ssl_expiry_timestamp'].strftime('%d/%m/%Y') if row['ssl_expiry_timestamp'] else ''
-            last_scan = row['scan_time'].strftime('%H:%M %d/%m/%Y') if row['scan_time'] else ''
-
-            writer.writerow([
-                row['domain'],
-                row['ssl_status'] or '',
-                expiry_date,
-                row['days_until_expiry'] or '',
-                last_scan
-            ])
-        
-        output.seek(0)
-        return StreamingResponse(
-            iter([output.getvalue()]),
-            media_type="text/csv",
-            headers={
-                "Content-Disposition": f"attachment; filename=ssl_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            }
-        )
-
-class ScanDomainsRequest(BaseModel):
-    domain_ids: List[int]
-
-@app.post("/api/scan/trigger")
-async def trigger_scan():
-    """Trigger immediate full scan by creating a signal file"""
-    try:
-        # Create a trigger file that scanner will check
-        trigger_file = "/tmp/ssl_scan_trigger"
-        with open(trigger_file, 'w') as f:
-            f.write(datetime.now().isoformat())
-
-        logger.info("Full scan trigger requested - signal file created")
-        return {
-            "status": "success",
-            "message": "Full scan triggered successfully. Scanner will start within 5 seconds.",
-            "triggered_at": datetime.now().isoformat()
-        }
-    except Exception as e:
-        logger.error(f"Error triggering scan: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to trigger scan: {str(e)}")
-
-@app.post("/api/scan/domains")
-async def scan_specific_domains(request: ScanDomainsRequest):
-    """Trigger scan for specific domains"""
-    try:
-        if not request.domain_ids:
-            raise HTTPException(status_code=400, detail="No domain IDs provided")
-
-        # Get domain names
-        async with db_pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT id, domain FROM domains WHERE id = ANY($1::int[]) AND is_active = TRUE",
-                request.domain_ids
-            )
-
-        if not rows:
-            raise HTTPException(status_code=404, detail="No active domains found")
-
-        # Write domain list to a file for scanner to pick up
-        scan_request_file = f"/tmp/ssl_scan_request_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        with open(scan_request_file, 'w') as f:
-            for row in rows:
-                f.write(f"{row['id']}|{row['domain']}\n")
-
-        # Create trigger file with the request file path
-        trigger_file = "/tmp/ssl_scan_trigger"
-        with open(trigger_file, 'w') as f:
-            f.write(scan_request_file)
-
-        domain_names = [r['domain'] for r in rows]
-        logger.info(f"Selective scan triggered for {len(domain_names)} domains")
-
-        return {
-            "status": "success",
-            "message": f"Scan triggered for {len(domain_names)} domains. Scanner will start within 5 seconds.",
-            "triggered_at": datetime.now().isoformat(),
-            "domain_count": len(domain_names),
-            "domains": domain_names
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error triggering selective scan: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to trigger scan: {str(e)}")
-
-@app.get("/health")
-async def health_check():
-    try:
-        async with db_pool.acquire() as conn:
-            await conn.fetchval("SELECT 1")
-        return {"status": "healthy", "database": "ok"}
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Service unhealthy: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+
+    uvicorn.run(
+        "main:app",
+        host=os.getenv("BACKEND_HOST", "0.0.0.0"),
+        port=int(os.getenv("BACKEND_PORT", "8080")),
+        workers=int(os.getenv("BACKEND_WORKERS", "4")),
+        log_level=os.getenv("BACKEND_LOG_LEVEL", "info"),
+        reload=ENVIRONMENT != "production"
+    )

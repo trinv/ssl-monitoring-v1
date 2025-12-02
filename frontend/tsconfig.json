@@ -1,0 +1,70 @@
+{
+  "compilerOptions": {
+    // ============================================
+    // Target & Library
+    // ============================================
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    
+    // ============================================
+    // Module Resolution
+    // ============================================
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    
+    // ============================================
+    // JavaScript Support (VANILLA JS)
+    // ============================================
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "isolatedModules": true,
+    
+    // ============================================
+    // Strict Type Checking
+    // ============================================
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    
+    // ============================================
+    // Code Quality
+    // ============================================
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": false,
+    "noFallthroughCasesInSwitch": true,
+    
+    // ============================================
+    // Skip Library Checking
+    // ============================================
+    "skipLibCheck": true
+  },
+  
+  // ============================================
+  // Files to Include
+  // ============================================
+  "include": [
+    "index.html",
+    "js/**/*.js",
+    "css/**/*.css"
+  ],
+  
+  // ============================================
+  // Files to Exclude
+  // ============================================
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".git"
+  ]
+}
