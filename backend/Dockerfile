@@ -12,8 +12,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
-COPY main.py .
-COPY auth/ ./auth/
+COPY *.py ./
+COPY routes/ ./routes/
 COPY entrypoint.sh .
 
 # Make entrypoint executable
